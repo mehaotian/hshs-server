@@ -18,7 +18,7 @@ from app.schemas.user import (
 )
 from app.services.user import UserService
 
-router = APIRouter(tags=["用户管理"])
+router = APIRouter()
 
 
 @router.post("/", response_model=UserResponse, summary="创建用户")

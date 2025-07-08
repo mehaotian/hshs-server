@@ -20,7 +20,7 @@ from app.schemas.audio import (
 )
 from app.services.audio import AudioService
 
-router = APIRouter(tags=["音频管理"])
+router = APIRouter()
 
 
 # ==================== CV录音管理 ====================
