@@ -185,11 +185,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # CSP头（根据需要调整）
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data: https:; "
-            "font-src 'self'; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
             "connect-src 'self'; "
+            "worker-src 'self' blob:; "
             "frame-ancestors 'none';"
         )
         response.headers["Content-Security-Policy"] = csp

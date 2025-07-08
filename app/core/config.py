@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     
     # 应用基础配置
     APP_NAME: str = "绘声绘社管理系统"
+    PROJECT_NAME: str = "绘声绘社管理系统"
+    PROJECT_DESCRIPTION: str = "绘声绘社有声剧本管理系统 - 提供剧本管理、音频处理、角色分配等功能"
     APP_VERSION: str = "1.0.0"
+    PROJECT_VERSION: str = "1.0.0"
     DEBUG: bool = True
     API_V1_STR: str = "/api/v1"
     
@@ -47,6 +50,15 @@ class Settings(BaseSettings):
     
     # 跨域配置
     BACKEND_CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080,http://localhost:5173"
+    CORS_ORIGINS: Optional[List[str]] = None
+    
+    # 中间件配置
+    ENABLE_COMPRESSION: bool = True
+    ENABLE_RATE_LIMIT: bool = True
+    RATE_LIMIT_CALLS: int = 100
+    RATE_LIMIT_PERIOD: int = 60
+    SESSION_MAX_AGE: int = 3600  # 1小时
+    ALLOWED_HOSTS: Optional[List[str]] = None
     
     def get_cors_origins(self) -> List[str]:
         """获取 CORS 来源列表"""
@@ -61,6 +73,7 @@ class Settings(BaseSettings):
     
     # 文件上传配置
     UPLOAD_DIR: str = str(BASE_DIR / "uploads")
+    STATIC_FILES_DIR: str = str(BASE_DIR / "static")
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     ALLOWED_AUDIO_EXTENSIONS: List[str] = [".mp3", ".wav", ".flac", ".m4a"]
     ALLOWED_SCRIPT_EXTENSIONS: List[str] = [".txt", ".docx", ".pdf"]
@@ -100,4 +113,5 @@ settings = Settings()
 
 # 确保必要的目录存在
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(settings.STATIC_FILES_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(settings.LOG_FILE), exist_ok=True)

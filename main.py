@@ -12,6 +12,7 @@ FastAPI 应用主入口文件
 """
 
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,8 +38,9 @@ def create_app() -> FastAPI:
         description=settings.PROJECT_DESCRIPTION,
         version=settings.PROJECT_VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
-        docs_url="/docs" if settings.DEBUG else None,
-        redoc_url="/redoc" if settings.DEBUG else None,
+        docs_url="/docs" if settings.DEBUG else None,  # Swagger UI 文档
+        redoc_url="/redoc" if settings.DEBUG else None,  # ReDoc 文档
+        lifespan=lifespan,
     )
     
     # 设置 CORS
@@ -74,6 +76,8 @@ def create_app() -> FastAPI:
             "version": settings.PROJECT_VERSION
         }
     
+
+
     # 根路径
     @app.get("/")
     async def root():
@@ -83,7 +87,7 @@ def create_app() -> FastAPI:
             "version": settings.PROJECT_VERSION,
             "docs": "/docs" if settings.DEBUG else "Documentation not available in production"
         }
-    
+
     return app
 
 
@@ -96,35 +100,48 @@ async def create_tables():
     logger.info("数据库表创建完成")
 
 
-# 创建应用实例
-app = create_app()
-
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    应用启动事件
+    应用生命周期管理
+    
+    在应用启动前执行初始化操作，在应用关闭时执行清理操作
     """
-    # 日志已在导入时自动设置
+    # 启动时执行
     logger.info(f"启动 {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}")
     
     # 创建数据库表
     await create_tables()
     
     logger.info("应用启动完成")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    应用关闭事件
-    """
+    
+    # 打印服务状态信息
+    print("\n" + "="*60)
+    print(f"🚀 {settings.PROJECT_NAME} 启动成功!")
+    print("="*60)
+    print(f"📊 服务器状态：✅ 正常运行")
+    print(f"🌐 访问地址：http://localhost:{settings.PORT}")
+    if settings.DEBUG:
+        print(f"📚 API 文档：http://localhost:{settings.PORT}/docs")
+        print(f"📖 ReDoc 文档：http://localhost:{settings.PORT}/redoc")
+    print(f"🔍 健康检查：http://localhost:{settings.PORT}/health")
+    print(f"📝 版本信息：v{settings.PROJECT_VERSION}")
+    print(f"🔧 运行模式：{'开发模式' if settings.DEBUG else '生产模式'}")
+    print("="*60 + "\n")
+    
+    yield
+    
+    # 关闭时执行
     logger.info("应用正在关闭...")
     
     # 关闭数据库连接
     await engine.dispose()
     
     logger.info("应用已关闭")
+
+
+# 创建应用实例
+app = create_app()
 
 
 if __name__ == "__main__":

@@ -82,7 +82,7 @@ docker-compose logs -f app
 
 ### 方式二：本地开发
 
-1. **安装依赖**
+#### 安装依赖
 
 ```bash
 # 创建虚拟环境
@@ -94,7 +94,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-2. **配置数据库**
+#### 配置数据库
 
 ```bash
 # 启动 PostgreSQL 和 Redis
@@ -104,7 +104,7 @@ docker-compose up -d postgres redis
 alembic upgrade head
 ```
 
-3. **启动开发服务器**
+#### 启动开发服务器
 
 ```bash
 # 使用 Makefile
@@ -118,7 +118,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ### 项目结构
 
-```
+```base
 hshs-server/
 ├── app/                    # 应用主目录
 │   ├── api/               # API 路由
