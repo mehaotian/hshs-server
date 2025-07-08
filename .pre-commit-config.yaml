@@ -1,0 +1,166 @@
+# Pre-commit 配置文件
+# 在代码提交前自动运行代码检查和格式化
+
+repos:
+  # Python 代码格式化
+  - repo: https://github.com/psf/black
+    rev: 23.11.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=120]
+        exclude: ^(migrations/|alembic/)
+
+  # Import 排序
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=120]
+        exclude: ^(migrations/|alembic/)
+
+  # 代码质量检查
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.1.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=120, --extend-ignore=E203,W503]
+        exclude: ^(migrations/|alembic/)
+        additional_dependencies:
+          - flake8-docstrings
+          - flake8-import-order
+          - flake8-bugbear
+
+  # 类型检查
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --no-strict-optional]
+        exclude: ^(tests/|migrations/|alembic/)
+        additional_dependencies:
+          - types-requests
+          - types-python-dateutil
+          - types-PyYAML
+
+  # 安全检查
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [-r, -f, json, -o, bandit-report.json]
+        exclude: ^(tests/|migrations/|alembic/)
+
+  # 通用检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # 检查文件大小
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      
+      # 检查合并冲突标记
+      - id: check-merge-conflict
+      
+      # 检查YAML语法
+      - id: check-yaml
+        exclude: ^(docker-compose\.yml|k8s/)
+      
+      # 检查JSON语法
+      - id: check-json
+      
+      # 检查TOML语法
+      - id: check-toml
+      
+      # 检查XML语法
+      - id: check-xml
+      
+      # 检查可执行文件有shebang
+      - id: check-executables-have-shebangs
+      
+      # 检查Python语法
+      - id: check-ast
+      
+      # 检查docstring第一行
+      - id: check-docstring-first
+      
+      # 修复文件末尾换行
+      - id: end-of-file-fixer
+        exclude: ^(.*\.svg|.*\.png|.*\.jpg|.*\.jpeg|.*\.gif)$
+      
+      # 修复行尾空格
+      - id: trailing-whitespace
+        exclude: ^(.*\.md|.*\.svg)$
+      
+      # 检查私钥
+      - id: detect-private-key
+      
+      # 检查AWS凭证
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+      
+      # 混合行结束符检查
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      
+      # 检查大小写冲突
+      - id: check-case-conflict
+      
+      # 检查符号链接
+      - id: check-symlinks
+      
+      # 检查vcs永久链接
+      - id: check-vcs-permalinks
+
+  # Python 依赖安全检查
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.2
+    hooks:
+      - id: python-safety-dependencies-check
+        files: requirements.*\.txt$
+
+  # Dockerfile 检查
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: [--ignore, DL3008, --ignore, DL3009]
+
+  # Shell 脚本检查
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: [-e, SC1091]
+
+  # 提交信息检查
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.12.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  # 密钥和敏感信息检查
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: ^(tests/|.*\.lock|package-lock\.json)$
+
+# 全局配置
+default_stages: [commit]
+fail_fast: false
+
+# CI 配置
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+    
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

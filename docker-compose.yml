@@ -1,0 +1,158 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: hshs-postgres
+    environment:
+      POSTGRES_DB: hshs_db
+      POSTGRES_USER: hshs_user
+      POSTGRES_PASSWORD: hshs_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - hshs-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hshs_user -d hshs_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存和任务队列
+  redis:
+    image: redis:7-alpine
+    container_name: hshs-redis
+    command: redis-server --appendonly yes --requirepass hshs_redis_password
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - hshs-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "hshs_redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI 应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hshs-app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://hshs_user:hshs_password@postgres:5432/hshs_db
+      - REDIS_URL=redis://:hshs_redis_password@redis:6379/0
+      - DEBUG=false
+      - SECRET_KEY=your-super-secret-key-change-this-in-production
+      - PROJECT_NAME=有声剧本管理系统
+      - PROJECT_VERSION=1.0.0
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    networks:
+      - hshs-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker (可选，用于后台任务)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hshs-celery-worker
+    command: celery -A app.core.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://hshs_user:hshs_password@postgres:5432/hshs_db
+      - REDIS_URL=redis://:hshs_redis_password@redis:6379/0
+      - SECRET_KEY=your-super-secret-key-change-this-in-production
+    volumes:
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+      - ./logs:/app/logs
+    networks:
+      - hshs-network
+    depends_on:
+      - postgres
+      - redis
+      - app
+    restart: unless-stopped
+    profiles:
+      - celery
+
+  # Celery Beat (可选，用于定时任务)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hshs-celery-beat
+    command: celery -A app.core.celery beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://hshs_user:hshs_password@postgres:5432/hshs_db
+      - REDIS_URL=redis://:hshs_redis_password@redis:6379/0
+      - SECRET_KEY=your-super-secret-key-change-this-in-production
+    volumes:
+      - ./uploads:/app/uploads
+      - ./static:/app/static
+      - ./logs:/app/logs
+    networks:
+      - hshs-network
+    depends_on:
+      - postgres
+      - redis
+      - app
+    restart: unless-stopped
+    profiles:
+      - celery
+
+  # Nginx 反向代理 (可选，生产环境推荐)
+  nginx:
+    image: nginx:alpine
+    container_name: hshs-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./static:/var/www/static:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - hshs-network
+    depends_on:
+      - app
+    restart: unless-stopped
+    profiles:
+      - nginx
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  hshs-network:
+    driver: bridge
