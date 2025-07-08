@@ -48,14 +48,15 @@ class UserCreate(UserBase):
     
     @validator('password')
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('密码长度至少8位')
-        if not any(c.isupper() for c in v):
-            raise ValueError('密码必须包含至少一个大写字母')
-        if not any(c.islower() for c in v):
-            raise ValueError('密码必须包含至少一个小写字母')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('密码必须包含至少一个数字')
+        if len(v) < 6:  # 暂时放宽到6位
+            raise ValueError('密码长度至少6位')
+        # 暂时注释掉复杂的密码要求
+        # if not any(c.isupper() for c in v):
+        #     raise ValueError('密码必须包含至少一个大写字母')
+        # if not any(c.islower() for c in v):
+        #     raise ValueError('密码必须包含至少一个小写字母')
+        # if not any(c.isdigit() for c in v):
+        #     raise ValueError('密码必须包含至少一个数字')
         return v
 
 
@@ -89,14 +90,15 @@ class UserPasswordUpdate(BaseModel):
     
     @validator('new_password')
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('密码长度至少8位')
-        if not any(c.isupper() for c in v):
-            raise ValueError('密码必须包含至少一个大写字母')
-        if not any(c.islower() for c in v):
-            raise ValueError('密码必须包含至少一个小写字母')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('密码必须包含至少一个数字')
+        if len(v) < 6:  # 暂时放宽到6位
+            raise ValueError('密码长度至少6位')
+        # 暂时注释掉复杂的密码要求
+        # if not any(c.isupper() for c in v):
+        #     raise ValueError('密码必须包含至少一个大写字母')
+        # if not any(c.islower() for c in v):
+        #     raise ValueError('密码必须包含至少一个小写字母')
+        # if not any(c.isdigit() for c in v):
+        #     raise ValueError('密码必须包含至少一个数字')
         return v
 
 

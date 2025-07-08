@@ -259,21 +259,22 @@ class ResponseBuilder:
     
     @staticmethod
     def validation_error(
-        message: str = "Validation failed",
+        message: str = "参数验证失败",
         validation_errors: List[Dict[str, Any]] = None,
         request_id: str = None
     ) -> JSONResponse:
         """验证错误响应"""
-        details = {}
+        data = {}
         if validation_errors:
-            details["validation_errors"] = validation_errors
+            data["errors"] = validation_errors
         
-        return ResponseBuilder.error(
-            error_code="VALIDATION_ERROR",
-            message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            details=details,
-            request_id=request_id
+        return JSONResponse(
+            status_code=200,
+            content={
+                "code": 400,
+                "message": message,
+                "data": data
+            }
         )
     
     @staticmethod

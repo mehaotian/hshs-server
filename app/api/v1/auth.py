@@ -1,13 +1,15 @@
 from datetime import timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import ValidationError
 
 from app.core.database import get_db
 from app.core.auth import AuthManager, get_current_user, get_current_active_user
 from app.core.response import ResponseBuilder
-from app.core.logger import logger
+from app.core.logger import logger, log_security_event, log_auth_attempt
 from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
@@ -16,69 +18,91 @@ from app.schemas.auth import (
     PasswordReset, PasswordResetConfirm, PasswordChange
 )
 from app.services.user import UserService
+from sqlalchemy import text
 
 router = APIRouter()
 auth_manager = AuthManager()
 
 
-@router.post("/register", response_model=UserResponse, summary="用户注册")
+@router.post("/register", summary="用户注册")
 async def register(
     register_data: UserRegister,
     db: AsyncSession = Depends(get_db)
 ):
     """用户注册"""
     try:
-        user_service = UserService(db)
+        # 生成唯一用户名（如果重复）
+        username = register_data.username
+        email = register_data.email
         
-        # 检查用户名是否已存在
-        existing_user = await user_service.get_user_by_username(register_data.username)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在"
-            )
-        
-        # 检查邮箱是否已存在
-        existing_email = await user_service.get_user_by_email(register_data.email)
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="邮箱已被注册"
-            )
-        
-        # 创建用户数据
-        user_create = UserCreate(
-            username=register_data.username,
-            email=register_data.email,
-            password=register_data.password,
-            full_name=register_data.full_name
+        # 检查用户名是否存在
+        result = await db.execute(
+            text("SELECT id FROM users WHERE username = :username"),
+            {"username": username}
         )
+        if result.scalar():
+            return ResponseBuilder.error(
+                business_code=3001,
+                message="用户名已存在"
+            )
+        
+        # 检查邮箱是否存在
+        result = await db.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        if result.scalar():
+            return ResponseBuilder.error(
+                business_code=3002,
+                message="邮箱已存在"
+            )
         
         # 创建用户
-        user = await user_service.create_user(user_create)
+        password_hash = AuthManager.get_password_hash(register_data.password)
         
-        logger.log_security_event(
-            "user_registered",
-            user_id=user.id,
-            details={
-                "username": user.username,
-                "email": user.email,
-                "registration_ip": "unknown"  # 可以从请求中获取IP
+        result = await db.execute(
+            text("""
+                INSERT INTO users (username, email, password_hash, real_name, status)
+                VALUES (:username, :email, :password_hash, :real_name, :status)
+                RETURNING id, username, email, real_name, created_at
+            """),
+            {
+                "username": username,
+                "email": email,
+                "password_hash": password_hash,
+                "real_name": register_data.full_name or username,
+                "status": 1
             }
         )
         
+        user_data = result.fetchone()
+        await db.commit()
+        
+        # 记录安全事件
+        log_security_event(
+            "user_registered",
+            user_id=user_data.id,
+            details=f"username: {user_data.username}, email: {user_data.email}, registration_ip: unknown"
+        )
+        
         return ResponseBuilder.created(
-            data=user,
+            data={
+                "id": user_data.id,
+                "username": user_data.username,
+                "email": user_data.email,
+                "real_name": user_data.real_name,
+                "created_at": user_data.created_at.isoformat() if user_data.created_at else None
+            },
             message="用户注册成功"
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Registration failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="注册失败，请稍后重试"
+        import traceback
+        error_msg = f"Registration failed: {str(e)}\n{traceback.format_exc()}"
+        print(f"[ERROR] {error_msg}")
+        return ResponseBuilder.error(
+            business_code=500,
+            message="注册失败，请稍后重试"
         )
 
 
@@ -98,10 +122,10 @@ async def login(
         )
         
         if not user:
-            logger.log_auth_attempt(
+            log_auth_attempt(
                 login_data.username,
                 success=False,
-                reason="invalid_credentials"
+                ip="unknown"
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -110,10 +134,10 @@ async def login(
             )
         
         if not user.is_active:
-            logger.log_auth_attempt(
+            log_auth_attempt(
                 login_data.username,
                 success=False,
-                reason="user_inactive"
+                ip="unknown"
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -134,10 +158,10 @@ async def login(
             expires_delta=refresh_token_expires
         )
         
-        logger.log_auth_attempt(
+        log_auth_attempt(
             login_data.username,
             success=True,
-            user_id=user.id
+            ip="unknown"
         )
         
         return Token(
@@ -173,10 +197,10 @@ async def login_for_access_token(
         )
         
         if not user:
-            logger.log_auth_attempt(
+            log_auth_attempt(
                 form_data.username,
                 success=False,
-                reason="invalid_credentials"
+                ip="unknown"
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -185,10 +209,10 @@ async def login_for_access_token(
             )
         
         if not user.is_active:
-            logger.log_auth_attempt(
+            log_auth_attempt(
                 form_data.username,
                 success=False,
-                reason="user_inactive"
+                ip="unknown"
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -209,10 +233,10 @@ async def login_for_access_token(
             expires_delta=refresh_token_expires
         )
         
-        logger.log_auth_attempt(
+        log_auth_attempt(
             form_data.username,
             success=True,
-            user_id=user.id
+            ip="unknown"
         )
         
         return Token(
@@ -489,3 +513,78 @@ async def verify_token(
         },
         message="令牌验证成功"
     )
+
+
+@router.post("/simple-register", summary="极简注册接口")
+async def simple_register(
+    register_data: UserRegister,
+    db: AsyncSession = Depends(get_db)
+):
+    """极简注册接口，用于调试"""
+    try:
+        # 生成唯一用户名（如果重复）
+        username = register_data.username
+        email = register_data.email
+        
+        # 检查用户名是否存在
+        result = await db.execute(
+            text("SELECT id FROM users WHERE username = :username"),
+            {"username": username}
+        )
+        if result.scalar():
+            return ResponseBuilder.error(
+                business_code=3001,
+                message="用户名已存在"
+            )
+        
+        # 检查邮箱是否存在
+        result = await db.execute(
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        if result.scalar():
+            return ResponseBuilder.error(
+                business_code=3002,
+                message="邮箱已存在"
+            )
+        
+        # 创建用户
+        password_hash = AuthManager.get_password_hash(register_data.password)
+        
+        result = await db.execute(
+            text("""
+                INSERT INTO users (username, email, password_hash, real_name, status)
+                VALUES (:username, :email, :password_hash, :real_name, :status)
+                RETURNING id, username, email, real_name, created_at
+            """),
+            {
+                "username": username,
+                "email": email,
+                "password_hash": password_hash,
+                "real_name": register_data.full_name or username,
+                "status": 1
+            }
+        )
+        
+        user_data = result.fetchone()
+        await db.commit()
+        
+        return ResponseBuilder.created(
+            data={
+                "id": user_data.id,
+                "username": user_data.username,
+                "email": user_data.email,
+                "real_name": user_data.real_name,
+                "created_at": user_data.created_at.isoformat() if user_data.created_at else None
+            },
+            message="用户注册成功"
+        )
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"Simple registration failed: {str(e)}\n{traceback.format_exc()}"
+        print(f"[ERROR] {error_msg}")
+        return ResponseBuilder.error(
+            business_code=500,
+            message="注册失败，请稍后重试"
+        )

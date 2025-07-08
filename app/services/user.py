@@ -24,7 +24,7 @@ class UserService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.db_manager = DatabaseManager(db)
+        self.db_manager = DatabaseManager()
     
     async def create_user(self, user_data: UserCreate) -> User:
         """创建用户"""
@@ -39,7 +39,7 @@ class UserService:
             raise_duplicate("User", "email", user_data.email)
         
         # 创建用户
-        user_dict = user_data.dict(exclude={"password"})
+        user_dict = user_data.model_dump(exclude={"password", "confirm_password"})
         user_dict["password_hash"] = AuthManager.get_password_hash(user_data.password)
         
         user = User(**user_dict)
@@ -99,7 +99,7 @@ class UserService:
                 raise_duplicate("User", "email", user_data.email)
         
         # 更新用户信息
-        update_data = user_data.dict(exclude_unset=True)
+        update_data = user_data.model_dump(exclude_unset=True)
         
         try:
             await self.db.execute(
@@ -254,8 +254,9 @@ class UserService:
         user = await AuthManager.authenticate_user(self.db, username, password)
         
         if user:
-            # 更新登录信息
-            await user.update_login_info(self.db)
+            # 更新最后登录时间
+            user.last_login = datetime.utcnow()
+            await self.db.commit()
             logger.info(f"User authenticated: {user.username} (ID: {user.id})")
         
         return user

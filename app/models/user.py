@@ -31,8 +31,8 @@ class User(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
 
     # 关系映射
-    user_roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
-    script_assignments = relationship("ScriptAssignment", back_populates="user")
+    user_roles = relationship("UserRole", back_populates="user", foreign_keys="UserRole.user_id", cascade="all, delete-orphan")
+    script_assignments = relationship("ScriptAssignment", back_populates="user", foreign_keys="ScriptAssignment.user_id")
     cv_recordings = relationship("CVRecording", back_populates="cv_user")
     review_records = relationship("ReviewRecord", back_populates="reviewer")
     created_scripts = relationship("Script", back_populates="creator")

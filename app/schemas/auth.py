@@ -10,7 +10,7 @@
 """
 
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 
 
@@ -40,13 +40,15 @@ class UserRegister(BaseModel):
     confirm_password: str = Field(..., min_length=6, max_length=128, description="确认密码")
     full_name: Optional[str] = Field(None, max_length=100, description="全名")
     
-    @validator('confirm_password')
-    def passwords_match(cls, v, values, **kwargs):
-        if 'password' in values and v != values['password']:
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
+        if 'password' in info.data and v != info.data['password']:
             raise ValueError('密码和确认密码不匹配')
         return v
     
-    @validator('username')
+    @field_validator('username')
+    @classmethod
     def username_alphanumeric(cls, v):
         if not v.replace('_', '').replace('-', '').isalnum():
             raise ValueError('用户名只能包含字母、数字、下划线和连字符')
@@ -124,9 +126,10 @@ class PasswordResetConfirm(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=128, description="新密码")
     confirm_password: str = Field(..., min_length=6, max_length=128, description="确认新密码")
     
-    @validator('confirm_password')
-    def passwords_match(cls, v, values, **kwargs):
-        if 'new_password' in values and v != values['new_password']:
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
+        if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError('密码和确认密码不匹配')
         return v
     
@@ -147,9 +150,10 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=128, description="新密码")
     confirm_password: str = Field(..., min_length=6, max_length=128, description="确认新密码")
     
-    @validator('confirm_password')
-    def passwords_match(cls, v, values, **kwargs):
-        if 'new_password' in values and v != values['new_password']:
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
+        if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError('密码和确认密码不匹配')
         return v
     

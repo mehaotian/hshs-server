@@ -255,10 +255,43 @@ def translate_validation_error(error_type: str, error_msg: str, field: str = "")
         "title": "标题",
         "content": "内容",
         "name": "名称",
-        "description": "描述"
+        "description": "描述",
+        "full_name": "姓名",
+        "real_name": "真实姓名",
+        "phone": "手机号",
+        "wechat": "微信号",
+        "bio": "个人简介",
+        "avatar_url": "头像",
+        "current_password": "当前密码",
+        "new_password": "新密码",
+        "invitation_code": "邀请码",
+        "agree_terms": "服务条款"
     }
     
     field_display = field_names.get(field, field)
+    
+    # 特殊错误信息处理（优先处理自定义验证器的错误）
+    special_error_patterns = {
+        "两次输入的密码不一致": "密码和确认密码不匹配",
+        "密码必须包含至少一个大写字母": "密码必须包含至少一个大写字母",
+        "密码必须包含至少一个小写字母": "密码必须包含至少一个小写字母",
+        "密码必须包含至少一个数字": "密码必须包含至少一个数字",
+        "密码长度至少8位": "密码长度至少需要8位",
+        "用户名只能包含字母、数字、下划线和连字符": "用户名只能包含字母、数字、下划线和连字符",
+        "手机号格式不正确": "手机号格式不正确",
+        "必须同意服务条款": "必须同意服务条款",
+        "Value error, 密码必须包含至少一个大写字母": "密码必须包含至少一个大写字母",
+        "Value error, 密码必须包含至少一个小写字母": "密码必须包含至少一个小写字母",
+        "Value error, 密码必须包含至少一个数字": "密码必须包含至少一个数字",
+        "Value error, 密码长度至少8位": "密码长度至少需要8位",
+        "Value error, 两次输入的密码不一致": "密码和确认密码不匹配",
+        "Value error, 用户名只能包含字母、数字、下划线和连字符": "用户名只能包含字母、数字、下划线和连字符"
+    }
+    
+    # 检查是否有特殊错误信息
+    for pattern, translation in special_error_patterns.items():
+        if pattern in error_msg:
+            return translation
     
     # 处理必填字段错误
     if error_type == "missing":
@@ -326,7 +359,9 @@ def translate_validation_error(error_type: str, error_msg: str, field: str = "")
         match = re.search(r'at least (\d+) characters', error_msg)
         if match:
             min_chars = match.group(1)
-            return f"至少需要{min_chars}个字符"
+            if field == "password":
+                return f"密码长度至少需要{min_chars}位"
+            return f"{field_display}至少需要{min_chars}个字符"
         return "字符串长度不足"
     
     if "String should have at most" in error_msg and "characters" in error_msg:
