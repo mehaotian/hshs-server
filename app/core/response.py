@@ -56,74 +56,66 @@ class ResponseBuilder:
     @staticmethod
     def success(
         data: Any = None,
-        message: str = "Success",
-        status_code: int = status.HTTP_200_OK,
+        message: str = "操作成功",
         request_id: str = None
     ) -> JSONResponse:
         """成功响应"""
-        response_data = ResponseModel(
-            success=True,
-            message=message,
-            data=data,
-            request_id=request_id
-        )
-        
         return JSONResponse(
-            status_code=status_code,
-            content=response_data.dict()
+            status_code=200,
+            content={
+                "code": 0,
+                "message": message,
+                "data": data if data is not None else {}
+            }
         )
     
     @staticmethod
     def created(
         data: Any = None,
-        message: str = "Created successfully",
+        message: str = "创建成功",
         request_id: str = None
     ) -> JSONResponse:
         """创建成功响应"""
         return ResponseBuilder.success(
             data=data,
             message=message,
-            status_code=status.HTTP_201_CREATED,
             request_id=request_id
         )
     
     @staticmethod
     def updated(
         data: Any = None,
-        message: str = "Updated successfully",
+        message: str = "更新成功",
         request_id: str = None
     ) -> JSONResponse:
         """更新成功响应"""
         return ResponseBuilder.success(
             data=data,
             message=message,
-            status_code=status.HTTP_200_OK,
             request_id=request_id
         )
     
     @staticmethod
     def deleted(
-        message: str = "Deleted successfully",
+        message: str = "删除成功",
         request_id: str = None
     ) -> JSONResponse:
         """删除成功响应"""
         return ResponseBuilder.success(
-            data=None,
+            data={},
             message=message,
-            status_code=status.HTTP_200_OK,
             request_id=request_id
         )
     
     @staticmethod
     def no_content(
-        message: str = "No content",
+        message: str = "无内容",
         request_id: str = None
     ) -> JSONResponse:
         """无内容响应"""
         return ResponseBuilder.success(
-            data=None,
+            data={},
             message=message,
-            status_code=status.HTTP_204_NO_CONTENT,
             request_id=request_id
         )
     
@@ -133,60 +125,61 @@ class ResponseBuilder:
         page: int,
         size: int,
         total: int,
-        message: str = "Success",
+        message: str = "查询成功",
         request_id: str = None
     ) -> JSONResponse:
         """分页响应"""
         pages = (total + size - 1) // size  # 向上取整
         
-        pagination = PaginationModel(
-            page=page,
-            size=size,
-            total=total,
-            pages=pages,
-            has_next=page < pages,
-            has_prev=page > 1
-        )
-        
-        response_data = PaginatedResponseModel(
-            success=True,
-            message=message,
-            data=data,
-            pagination=pagination,
-            request_id=request_id
-        )
+        pagination = {
+            "page": page,
+            "size": size,
+            "total": total,
+            "pages": pages,
+            "has_next": page < pages,
+            "has_prev": page > 1
+        }
         
         return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content=response_data.dict()
+            status_code=200,
+            content={
+                "code": 0,
+                "message": message,
+                "data": {
+                    "list": data,
+                    "pagination": pagination
+                }
+            }
         )
     
     @staticmethod
     def error(
-        error_code: str,
+        business_code: int,
         message: str,
-        status_code: int = status.HTTP_400_BAD_REQUEST,
-        details: Dict[str, Any] = None,
+        data: Any = None,
         request_id: str = None
     ) -> JSONResponse:
         """错误响应"""
-        error_info = {
-            "code": error_code,
-            "message": message
-        }
-        
-        if details:
-            error_info["details"] = details
-        
-        response_data = ErrorResponseModel(
-            success=False,
-            error=error_info,
-            request_id=request_id
-        )
-        
         return JSONResponse(
-            status_code=status_code,
-            content=response_data.dict()
+            status_code=200,
+            content={
+                "code": business_code,
+                "message": message,
+                "data": data if data is not None else {}
+            }
+        )
+    
+    @staticmethod
+    def business_error(
+        business_code: int,
+        message: str,
+        request_id: str = None
+    ) -> JSONResponse:
+        """业务错误响应"""
+        return ResponseBuilder.error(
+            business_code=business_code,
+            message=message,
+            request_id=request_id
         )
     
     @staticmethod

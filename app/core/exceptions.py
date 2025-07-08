@@ -172,6 +172,23 @@ async def custom_exception_handler(request: Request, exc: BaseCustomException):
     """自定义异常处理器"""
     request_id = getattr(request.state, "request_id", None)
     
+    # 映射自定义异常到业务状态码
+    exception_code_mapping = {
+        "AuthenticationException": 2001,  # 未登录
+        "AuthorizationException": 2003,   # 权限不足
+        "ResourceNotFoundException": 1005,  # 资源不存在
+        "DuplicateResourceException": 1003,  # 资源重复
+        "ValidationException": 1003,       # 验证错误
+        "BusinessException": 1000,         # 业务异常
+        "FileOperationException": 1000,    # 文件操作异常
+        "ExternalServiceException": 1000,  # 外部服务异常
+        "RateLimitException": 1006,        # 限流异常
+        "DatabaseException": 1000,         # 数据库异常
+        "ConfigurationException": 1000,    # 配置异常
+    }
+    
+    business_code = exception_code_mapping.get(exc.error_code, 1000)
+    
     # 记录异常日志
     logger.error(
         f"Custom Exception: {exc.error_code} - {exc.message} - "
@@ -181,13 +198,12 @@ async def custom_exception_handler(request: Request, exc: BaseCustomException):
     )
     
     return JSONResponse(
-        status_code=exc.status_code,
-        content=create_error_response(
-            error_code=exc.error_code,
-            message=exc.message,
-            details=exc.details,
-            request_id=request_id
-        )
+        status_code=200,
+        content={
+            "code": business_code,
+            "message": exc.message,
+            "data": {}
+        }
     )
 
 
@@ -195,26 +211,82 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     """HTTP异常处理器"""
     request_id = getattr(request.state, "request_id", None)
     
+    # 映射HTTP状态码到业务状态码
+    status_code_mapping = {
+        401: 2001,  # 未登录
+        403: 2003,  # 权限不足
+        404: 1005,  # 请求路径不存在
+        405: 1004,  # 请求方法不支持
+        429: 1006,  # 请求频率过高
+        500: 1000,  # 系统内部错误
+        503: 1007,  # 服务暂不可用
+    }
+    
+    business_code = status_code_mapping.get(exc.status_code, 1000)
+    
     # 记录异常日志
     logger.warning(
         f"HTTP Exception: {exc.status_code} - {exc.detail} - "
         f"Path: {request.url.path} - Method: {request.method} - "
         f"Request ID: {request_id}",
-        extra={"request_id": request_id}
+        extra={"status_code": exc.status_code, "detail": exc.detail, "request_id": request_id}
     )
     
     return JSONResponse(
-        status_code=exc.status_code,
-        content=create_error_response(
-            error_code="HTTP_ERROR",
-            message=str(exc.detail),
-            request_id=request_id
-        )
+        status_code=200,
+        content={
+            "code": business_code,
+            "message": str(exc.detail),
+            "data": {}
+        }
     )
 
 
-def translate_validation_error(error_type: str, error_msg: str, field: str = None) -> str:
-    """将Pydantic验证错误信息翻译为中文"""
+def translate_validation_error(error_type: str, error_msg: str, field: str = "") -> str:
+    """
+    将 Pydantic 验证错误信息翻译为中文
+    """
+    # 字段名称映射
+    field_names = {
+        "username": "用户名",
+        "email": "邮箱",
+        "password": "密码",
+        "confirm_password": "确认密码",
+        "title": "标题",
+        "content": "内容",
+        "name": "名称",
+        "description": "描述"
+    }
+    
+    field_display = field_names.get(field, field)
+    
+    # 处理必填字段错误
+    if error_type == "missing":
+        return f"{field_display}为必填项"
+    
+    # 处理字符串长度错误
+    if error_type in ["string_too_short", "string_too_long"]:
+        import re
+        numbers = re.findall(r'\d+', error_msg)
+        if numbers:
+            length = numbers[0]
+            if error_type == "string_too_short":
+                return f"{field_display}至少需要{length}个字符"
+            else:
+                return f"{field_display}最多允许{length}个字符"
+    
+    # 处理邮箱验证错误
+    if "email" in error_msg.lower() or "value is not a valid email address" in error_msg:
+        return "邮箱地址格式不正确"
+    
+    # 处理自定义验证器返回的中文错误信息
+    if "Value error, " in error_msg:
+        clean_msg = error_msg.replace("Value error, ", "")
+        return clean_msg
+    
+    # 处理类型错误
+    if error_type == "type_error":
+        return f"{field_display}数据类型错误"
     
     # 错误类型映射表
     error_type_mapping = {
@@ -235,11 +307,6 @@ def translate_validation_error(error_type: str, error_msg: str, field: str = Non
         "value_error.uuid": "UUID格式不正确",
         "value_error.json": "JSON格式不正确",
     }
-    
-    # 处理自定义验证器返回的错误信息，去掉"Value error, "前缀
-    if "Value error, " in error_msg:
-        clean_msg = error_msg.replace("Value error, ", "")
-        return clean_msg
     
     # 特殊错误信息处理
     if "email" in error_msg.lower() and "valid" in error_msg.lower():
@@ -315,48 +382,79 @@ def translate_validation_error(error_type: str, error_msg: str, field: str = Non
     if error_type in error_type_mapping:
         return error_type_mapping[error_type]
     
-    # 如果没有找到对应的翻译，返回原始错误信息
+    # 默认返回原始消息
     return error_msg
 
 
+def map_validation_error_to_business_code(field: str, error_type: str, error_msg: str):
+    """将验证错误映射为业务状态码"""
+    # 翻译错误信息为中文
+    translated_msg = translate_validation_error(error_type, error_msg, field)
+    
+    # 根据字段和错误类型映射具体的业务状态码
+    if error_type == "missing":
+        return 1002, translated_msg  # 参数缺失
+    
+    # 用户名相关错误
+    if field == "username":
+        if "string_too_short" in error_type or "string_too_long" in error_type:
+            return 3002, translated_msg  # 用户名长度错误
+        elif "value_error" in error_type:
+            return 3001, translated_msg  # 用户名格式错误
+    
+    # 邮箱相关错误
+    elif field == "email":
+        return 3004, translated_msg  # 邮箱格式错误
+    
+    # 密码相关错误
+    elif field == "password":
+        if "string_too_short" in error_type or "string_too_long" in error_type:
+            return 3006, translated_msg  # 密码长度错误
+        elif "value_error" in error_type:
+            return 3007, translated_msg  # 密码格式错误
+    
+    # 确认密码错误
+    elif field == "confirm_password":
+        if "value_error" in error_type:
+            return 3008, translated_msg  # 密码不匹配
+    
+    # 通用错误
+    if "string_too_short" in error_type or "string_too_long" in error_type:
+        return 1003, translated_msg  # 参数值无效
+    elif "type_error" in error_type:
+        return 1001, translated_msg  # 参数错误
+    else:
+        return 1003, translated_msg  # 参数值无效
+
+
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """请求验证异常处理器"""
+    """请求验证异常处理器 - 返回第一个验证错误"""
     request_id = getattr(request.state, "request_id", None)
     
-    # 格式化验证错误
-    errors = []
-    for error in exc.errors():
-        field = ".".join(str(loc) for loc in error["loc"][1:])  # 跳过 'body'
-        
-        # 翻译错误信息为中文
-        translated_message = translate_validation_error(
-            error["type"], 
-            error["msg"], 
-            field
-        )
-        
-        errors.append({
-            "field": field,
-            "message": translated_message,
-            "type": error["type"]
-        })
+    # 获取第一个错误
+    first_error = exc.errors()[0]
+    field = ".".join(str(loc) for loc in first_error["loc"][1:])  # 跳过 'body'
+    error_type = first_error["type"]
+    error_msg = first_error["msg"]
+    
+    # 根据错误类型映射业务状态码
+    business_code, translated_msg = map_validation_error_to_business_code(field, error_type, error_msg)
     
     # 记录异常日志
     logger.warning(
-        f"Validation Error: {len(errors)} validation errors - "
-        f"Path: {request.url.path} - Method: {request.method} - "
+        f"Validation Error: {error_type} - {translated_msg} - "
+        f"Field: {field} - Path: {request.url.path} - Method: {request.method} - "
         f"Request ID: {request_id}",
-        extra={"validation_errors": errors, "request_id": request_id}
+        extra={"field": field, "error_type": error_type, "request_id": request_id}
     )
     
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=create_error_response(
-            error_code="VALIDATION_ERROR",
-            message="请求数据验证失败",
-            details={"validation_errors": errors},
-            request_id=request_id
-        )
+        status_code=200,
+        content={
+            "code": business_code,
+            "message": translated_msg,
+            "data": {}
+        }
     )
 
 
@@ -375,29 +473,32 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     # 处理特定的数据库异常
     if isinstance(exc, IntegrityError):
         # 完整性约束违反
-        error_message = "Data integrity constraint violation"
+        error_message = "数据完整性约束违反"
+        business_code = 1003
         if "duplicate key" in str(exc).lower():
-            error_message = "Duplicate entry found"
+            error_message = "数据重复"
+            business_code = 1003
         elif "foreign key" in str(exc).lower():
-            error_message = "Referenced resource not found"
+            error_message = "引用的资源不存在"
+            business_code = 1005
         
         return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content=create_error_response(
-                error_code="INTEGRITY_ERROR",
-                message=error_message,
-                request_id=request_id
-            )
+            status_code=200,
+            content={
+                "code": business_code,
+                "message": error_message,
+                "data": {}
+            }
         )
     
     # 通用数据库错误
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=create_error_response(
-            error_code="DATABASE_ERROR",
-            message="Database operation failed",
-            request_id=request_id
-        )
+        status_code=200,
+        content={
+            "code": 1000,
+            "message": "数据库操作失败",
+            "data": {}
+        }
     )
 
 
@@ -414,12 +515,12 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
     
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=create_error_response(
-            error_code="INTERNAL_ERROR",
-            message="Internal server error",
-            request_id=request_id
-        )
+        status_code=200,
+        content={
+            "code": 1000,
+            "message": "系统内部错误",
+            "data": {}
+        }
     )
 
 

@@ -238,13 +238,17 @@ class HealthCheckMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # 健康检查端点直接返回
-        if request.url.path in ["/health", "/ping", "/status"]:
+        if request.url.path in ["/ping", "/status"]:
             return JSONResponse(
                 status_code=200,
                 content={
-                    "status": "healthy",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "version": settings.APP_VERSION
+                    "code": 0,
+                    "message": "服务运行正常",
+                    "data": {
+                        "status": "healthy",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "version": settings.APP_VERSION
+                    }
                 }
             )
         

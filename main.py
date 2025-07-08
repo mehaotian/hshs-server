@@ -13,6 +13,7 @@ FastAPI 应用主入口文件
 
 import uvicorn
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,9 +72,14 @@ def create_app() -> FastAPI:
     async def health_check():
         """健康检查端点"""
         return {
-            "status": "healthy",
-            "service": settings.PROJECT_NAME,
-            "version": settings.PROJECT_VERSION
+            "code": 0,
+            "message": "服务运行正常",
+            "data": {
+                "status": "healthy",
+                "service": settings.PROJECT_NAME,
+                "version": settings.PROJECT_VERSION,
+                "timestamp": datetime.utcnow().isoformat()
+            }
         }
     
 
@@ -83,9 +89,13 @@ def create_app() -> FastAPI:
     async def root():
         """根路径"""
         return {
-            "message": f"Welcome to {settings.PROJECT_NAME}",
-            "version": settings.PROJECT_VERSION,
-            "docs": "/docs" if settings.DEBUG else "Documentation not available in production"
+            "code": 0,
+            "message": "欢迎使用API服务",
+            "data": {
+                "service": settings.PROJECT_NAME,
+                "version": settings.PROJECT_VERSION,
+                "docs": "/docs" if settings.DEBUG else "Documentation not available in production"
+            }
         }
 
     return app
