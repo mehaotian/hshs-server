@@ -17,7 +17,7 @@ from app.schemas.auth import (
 )
 from app.services.user import UserService
 
-router = APIRouter(prefix="/auth", tags=["认证授权"])
+router = APIRouter(tags=["认证授权"])
 auth_manager = AuthManager()
 
 

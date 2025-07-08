@@ -17,7 +17,7 @@ from app.schemas.script import (
 )
 from app.services.script import ScriptService
 
-router = APIRouter(prefix="/scripts", tags=["剧本管理"])
+router = APIRouter(tags=["剧本管理"])
 
 
 # ==================== 剧社管理 ====================

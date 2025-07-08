@@ -15,7 +15,7 @@ from app.schemas.role import (
 )
 from app.services.role import RoleService
 
-router = APIRouter(prefix="/roles", tags=["角色权限管理"])
+router = APIRouter(tags=["角色权限管理"])
 
 
 # ==================== 角色管理 ====================
