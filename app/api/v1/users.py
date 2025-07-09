@@ -9,6 +9,10 @@ from app.core.auth import (
 )
 from app.core.response import ResponseBuilder
 from app.core.logger import logger, log_security_event
+from app.core.exceptions import (
+    raise_user_not_found, raise_business_error, raise_server_error,
+    raise_not_found_resource, BaseCustomException
+)
 from app.models.user import User, UserProfile
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, UserListResponse,
@@ -54,7 +58,7 @@ async def create_user(
         raise
     except Exception as e:
         logger.error(f"Failed to create user: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建用户失败")
+        raise_business_error("创建用户失败", 1000)
 
 
 @router.get("/profile", response_model=UserResponse, summary="获取当前用户信息")
@@ -96,7 +100,7 @@ async def update_current_user(
         raise
     except Exception as e:
         logger.error(f"Failed to update user: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新用户信息失败")
+        raise_business_error("更新用户信息失败", 1000)
 
 
 @router.put("/change-password", summary="修改当前用户密码")
@@ -126,7 +130,7 @@ async def change_password(
         raise
     except Exception as e:
         logger.error(f"Failed to change password: {str(e)}")
-        raise HTTPException(status_code=500, detail="修改密码失败")
+        raise_business_error("修改密码失败", 1000)
 
 
 @router.get("/detail/{user_id}", response_model=UserResponse, summary="获取用户信息")
@@ -141,17 +145,15 @@ async def get_user(
         user = await user_service.get_user_by_id(user_id)
         
         if not user:
-            raise HTTPException(status_code=404, detail="用户不存在")
+            raise_user_not_found()
         
         return ResponseBuilder.success(
             data=user.to_dict_sync(),
             message="获取用户信息成功"
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Failed to get user: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户信息失败")
+        raise_business_error("获取用户信息失败", 1000)
 
 
 @router.put("/update/{user_id}", response_model=UserResponse, summary="更新用户信息")
@@ -183,7 +185,7 @@ async def update_user(
         raise
     except Exception as e:
         logger.error(f"Failed to update user: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新用户信息失败")
+        raise_business_error("更新用户信息失败", 1000)
 
 
 @router.delete("/delete/{user_id}", summary="删除用户")
@@ -208,7 +210,7 @@ async def delete_user(
         )
     except Exception as e:
         logger.error(f"Failed to delete user: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除用户失败", 1000)
 
 
 @router.get("/list", response_model=UserListResponse, summary="获取用户列表")
@@ -249,7 +251,7 @@ async def get_users(
         )
     except Exception as e:
         logger.error(f"Failed to get users: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户列表失败")
+        raise_business_error("获取用户列表失败", 1000)
 
 
 @router.post("/batch-operation", summary="批量操作用户")
@@ -275,7 +277,7 @@ async def batch_operation_users(
         )
     except Exception as e:
         logger.error(f"Failed to batch operation users: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("批量操作用户失败", 1000)
 
 
 @router.get("/stats", response_model=UserStatistics, summary="获取用户统计信息")
@@ -294,7 +296,7 @@ async def get_user_statistics(
         )
     except Exception as e:
         logger.error(f"Failed to get user statistics: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户统计信息失败")
+        raise_business_error("获取用户统计信息失败", 1000)
 
 
 # ==================== 用户档案相关接口 ====================
@@ -321,7 +323,7 @@ async def create_user_profile(
         raise
     except Exception as e:
         logger.error(f"Failed to create user profile: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建用户档案失败")
+        raise_business_error("创建用户档案失败", 1000)
 
 
 @router.get("/me/profile", response_model=UserProfileResponse, summary="获取用户档案")
@@ -335,17 +337,17 @@ async def get_user_profile(
         profile = await user_service.get_user_profile(current_user.id)
         
         if not profile:
-            raise HTTPException(status_code=404, detail="用户档案不存在")
+            raise_not_found_resource("用户档案")
         
         return ResponseBuilder.success(
             data=profile.to_dict(),
             message="获取用户档案成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get user profile: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户档案失败")
+        raise_business_error("获取用户档案失败", 1000)
 
 
 @router.put("/me/profile", response_model=UserProfileResponse, summary="更新用户档案")
@@ -370,7 +372,7 @@ async def update_user_profile(
         raise
     except Exception as e:
         logger.error(f"Failed to update user profile: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新用户档案失败")
+        raise_business_error("更新用户档案失败", 1000)
 
 
 @router.get("/{user_id}/profile", response_model=UserProfileResponse, summary="获取指定用户档案")
@@ -385,17 +387,17 @@ async def get_user_profile_by_id(
         profile = await user_service.get_user_profile(user_id)
         
         if not profile:
-            raise HTTPException(status_code=404, detail="用户档案不存在")
+            raise_not_found_resource("用户档案")
         
         return ResponseBuilder.success(
             data=profile.to_dict(),
             message="获取用户档案成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get user profile: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户档案失败")
+        raise_business_error("获取用户档案失败", 1000)
 
 
 # ==================== 用户角色和权限查询 ====================
@@ -416,7 +418,7 @@ async def get_current_user_roles(
         )
     except Exception as e:
         logger.error(f"Failed to get user roles: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户角色失败")
+        raise_business_error("获取用户角色失败", 1000)
 
 
 @router.get("/me/permissions", summary="获取当前用户权限")
@@ -435,7 +437,7 @@ async def get_current_user_permissions(
         )
     except Exception as e:
         logger.error(f"Failed to get user permissions: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户权限失败")
+        raise_business_error("获取用户权限失败", 1000)
 
 
 @router.get("/{user_id}/roles", summary="获取指定用户角色")
@@ -455,4 +457,4 @@ async def get_user_roles_by_id(
         )
     except Exception as e:
         logger.error(f"Failed to get user roles: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户角色失败")
+        raise_business_error("获取用户角色失败", 1000)

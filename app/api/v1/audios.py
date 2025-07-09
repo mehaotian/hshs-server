@@ -10,6 +10,9 @@ from app.core.response import ResponseBuilder
 from app.core.logger import logger
 from app.core.config import settings
 from app.models.user import User
+from app.core.exceptions import (
+    raise_business_error, raise_not_found_resource, raise_server_error, BaseCustomException
+)
 from app.schemas.audio import (
     CVRecordingCreate, CVRecordingUpdate, CVRecordingResponse, CVRecordingDetailResponse,
     ReviewRecordCreate, ReviewRecordUpdate, ReviewRecordResponse,
@@ -40,13 +43,13 @@ async def create_cv_recording(
     try:
         # 验证音频文件
         if not audio_file.filename.lower().endswith(('.mp3', '.wav', '.m4a', '.aac', '.flac')):
-            raise HTTPException(status_code=400, detail="不支持的音频格式")
+            raise_business_error("不支持的音频格式", 4001)
         
         # 检查文件大小（例如限制为100MB）
         max_size = 100 * 1024 * 1024  # 100MB
         content = await audio_file.read()
         if len(content) > max_size:
-            raise HTTPException(status_code=400, detail="音频文件过大，请上传小于100MB的文件")
+            raise_business_error("音频文件过大，请上传小于100MB的文件", 4002)
         
         # 创建录音数据
         recording_data = CVRecordingCreate(
@@ -75,11 +78,11 @@ async def create_cv_recording(
             data=recording,
             message="CV录音创建成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to create CV recording: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建CV录音失败")
+        raise_business_error("创建CV录音失败", 1000)
 
 
 @router.get("/recordings/{recording_id}", response_model=CVRecordingDetailResponse, summary="获取CV录音详情")
@@ -94,17 +97,17 @@ async def get_cv_recording(
         recording = await audio_service.get_cv_recording_by_id(recording_id)
         
         if not recording:
-            raise HTTPException(status_code=404, detail="录音不存在")
+            raise_not_found_resource("录音")
         
         return ResponseBuilder.success(
             data=recording,
             message="获取录音信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get CV recording: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取录音信息失败")
+        raise_business_error("获取录音信息失败", 1000)
 
 
 @router.put("/recordings/{recording_id}", response_model=CVRecordingResponse, summary="更新CV录音信息")
@@ -130,7 +133,7 @@ async def update_cv_recording(
         )
     except Exception as e:
         logger.error(f"Failed to update CV recording: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("录音信息更新失败", 1000)
 
 
 @router.delete("/recordings/{recording_id}", summary="删除CV录音")
@@ -154,7 +157,7 @@ async def delete_cv_recording(
         )
     except Exception as e:
         logger.error(f"Failed to delete CV recording: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("录音删除失败", 1000)
 
 
 @router.get("/recordings", summary="获取CV录音列表")
@@ -198,7 +201,7 @@ async def get_cv_recordings(
         )
     except Exception as e:
         logger.error(f"Failed to get CV recordings: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取录音列表失败")
+        raise_business_error("获取录音列表失败", 1000)
 
 
 @router.get("/recordings/{recording_id}/download", summary="下载音频文件")
@@ -213,12 +216,12 @@ async def download_audio_file(
         recording = await audio_service.get_cv_recording_by_id(recording_id)
         
         if not recording:
-            raise HTTPException(status_code=404, detail="录音不存在")
+            raise_not_found_resource("录音")
         
         file_path = await audio_service.get_audio_file_path(recording_id)
         
         if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="音频文件不存在")
+            raise_not_found_resource("音频文件")
         
         logger.info(
             f"Audio file downloaded: {recording_id} by user {current_user.username}",
@@ -230,11 +233,11 @@ async def download_audio_file(
             filename=recording.file_name,
             media_type='application/octet-stream'
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to download audio file: {str(e)}")
-        raise HTTPException(status_code=500, detail="下载音频文件失败")
+        raise_business_error("下载音频文件失败", 1000)
 
 
 # ==================== 审听记录管理 ====================
@@ -261,7 +264,7 @@ async def create_review_record(
         )
     except Exception as e:
         logger.error(f"Failed to create review record: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("审听记录创建失败", 1000)
 
 
 @router.get("/reviews/{review_id}", response_model=ReviewRecordResponse, summary="获取审听记录")
@@ -276,17 +279,17 @@ async def get_review_record(
         review = await audio_service.get_review_record_by_id(review_id)
         
         if not review:
-            raise HTTPException(status_code=404, detail="审听记录不存在")
+            raise_not_found_resource("审听记录")
         
         return ResponseBuilder.success(
             data=review,
             message="获取审听记录成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get review record: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取审听记录失败")
+        raise_business_error("获取审听记录失败", 1000)
 
 
 @router.put("/reviews/{review_id}", response_model=ReviewRecordResponse, summary="更新审听记录")
@@ -312,7 +315,7 @@ async def update_review_record(
         )
     except Exception as e:
         logger.error(f"Failed to update review record: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("审听记录更新失败", 1000)
 
 
 @router.get("/recordings/{recording_id}/reviews", summary="获取录音的审听记录")
@@ -337,7 +340,7 @@ async def get_recording_reviews(
         )
     except Exception as e:
         logger.error(f"Failed to get recording reviews: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取审听记录失败")
+        raise_business_error("获取审听记录失败", 1000)
 
 
 # ==================== 反音记录管理 ====================
@@ -364,7 +367,7 @@ async def create_feedback_record(
         )
     except Exception as e:
         logger.error(f"Failed to create feedback record: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("反音记录创建失败", 1000)
 
 
 @router.get("/feedback/{feedback_id}", response_model=FeedbackRecordResponse, summary="获取反音记录")
@@ -379,17 +382,17 @@ async def get_feedback_record(
         feedback = await audio_service.get_feedback_record_by_id(feedback_id)
         
         if not feedback:
-            raise HTTPException(status_code=404, detail="反音记录不存在")
+            raise_not_found_resource("反音记录")
         
         return ResponseBuilder.success(
             data=feedback,
             message="获取反音记录成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get feedback record: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取反音记录失败")
+        raise_business_error("获取反音记录失败", 1000)
 
 
 @router.put("/feedback/{feedback_id}", response_model=FeedbackRecordResponse, summary="更新反音记录")
@@ -415,7 +418,7 @@ async def update_feedback_record(
         )
     except Exception as e:
         logger.error(f"Failed to update feedback record: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("反音记录更新失败", 1000)
 
 
 @router.get("/recordings/{recording_id}/feedback", summary="获取录音的反音记录")
@@ -440,7 +443,7 @@ async def get_recording_feedback(
         )
     except Exception as e:
         logger.error(f"Failed to get recording feedback: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取反音记录失败")
+        raise_business_error("获取反音记录失败", 1000)
 
 
 # ==================== 音频模板管理 ====================
@@ -467,7 +470,7 @@ async def create_audio_template(
         )
     except Exception as e:
         logger.error(f"Failed to create audio template: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("音频模板创建失败", 1000)
 
 
 @router.get("/templates/{template_id}", response_model=AudioTemplateResponse, summary="获取音频模板")
@@ -482,17 +485,17 @@ async def get_audio_template(
         template = await audio_service.get_audio_template_by_id(template_id)
         
         if not template:
-            raise HTTPException(status_code=404, detail="音频模板不存在")
+            raise_not_found_resource("音频模板")
         
         return ResponseBuilder.success(
             data=template,
             message="获取音频模板成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get audio template: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取音频模板失败")
+        raise_business_error("获取音频模板失败", 1000)
 
 
 @router.put("/templates/{template_id}", response_model=AudioTemplateResponse, summary="更新音频模板")
@@ -518,7 +521,7 @@ async def update_audio_template(
         )
     except Exception as e:
         logger.error(f"Failed to update audio template: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("音频模板更新失败", 1000)
 
 
 @router.get("/templates", summary="获取音频模板列表")
@@ -544,7 +547,7 @@ async def get_audio_templates(
         )
     except Exception as e:
         logger.error(f"Failed to get audio templates: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取音频模板列表失败")
+        raise_business_error("获取音频模板列表失败", 1000)
 
 
 # ==================== 音频质量检查 ====================
@@ -572,7 +575,7 @@ async def check_audio_quality(
         )
     except Exception as e:
         logger.error(f"Failed to check audio quality: {str(e)}")
-        raise HTTPException(status_code=500, detail="音频质量检查失败")
+        raise_business_error("音频质量检查失败", 1000)
 
 
 # ==================== 批量操作和统计 ====================
@@ -603,7 +606,7 @@ async def batch_operation_audios(
         )
     except Exception as e:
         logger.error(f"Failed to batch operation audios: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("批量操作失败", 1000)
 
 
 @router.get("/statistics/overview", response_model=AudioStatistics, summary="获取音频统计信息")
@@ -622,7 +625,7 @@ async def get_audio_statistics(
         )
     except Exception as e:
         logger.error(f"Failed to get audio statistics: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取音频统计信息失败")
+        raise_business_error("获取音频统计信息失败", 1000)
 
 
 # ==================== 搜索接口 ====================
@@ -664,7 +667,7 @@ async def search_reviews(
         )
     except Exception as e:
         logger.error(f"Failed to search reviews: {str(e)}")
-        raise HTTPException(status_code=500, detail="搜索审听记录失败")
+        raise_business_error("搜索审听记录失败", 1000)
 
 
 @router.get("/search/feedback", summary="搜索反音记录")
@@ -704,4 +707,4 @@ async def search_feedback(
         )
     except Exception as e:
         logger.error(f"Failed to search feedback: {str(e)}")
-        raise HTTPException(status_code=500, detail="搜索反音记录失败")
+        raise_business_error("搜索反音记录失败", 1000)

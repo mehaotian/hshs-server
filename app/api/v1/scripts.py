@@ -6,6 +6,10 @@ from app.core.database import get_db
 from app.core.auth import get_current_user, require_permission
 from app.core.response import ResponseBuilder
 from app.core.logger import logger
+from app.core.exceptions import (
+    raise_business_error, raise_not_found_resource, raise_server_error,
+    BaseCustomException
+)
 from app.models.user import User
 from app.schemas.script import (
     DramaSocietyCreate, DramaSocietyUpdate, DramaSocietyResponse,
@@ -44,7 +48,7 @@ async def create_drama_society(
         )
     except Exception as e:
         logger.error(f"Failed to create drama society: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("创建剧社失败", 1000)
 
 
 @router.get("/societies/{society_id}", response_model=DramaSocietyResponse, summary="获取剧社信息")
@@ -59,17 +63,17 @@ async def get_drama_society(
         society = await script_service.get_drama_society_by_id(society_id)
         
         if not society:
-            raise HTTPException(status_code=404, detail="剧社不存在")
+            raise_not_found_resource("剧社")
         
         return ResponseBuilder.success(
             data=society,
             message="获取剧社信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get drama society: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取剧社信息失败")
+        raise_business_error("获取剧社信息失败", 1000)
 
 
 @router.put("/societies/{society_id}", response_model=DramaSocietyResponse, summary="更新剧社信息")
@@ -95,7 +99,7 @@ async def update_drama_society(
         )
     except Exception as e:
         logger.error(f"Failed to update drama society: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("更新剧社信息失败", 1000)
 
 
 @router.delete("/societies/{society_id}", summary="删除剧社")
@@ -119,7 +123,7 @@ async def delete_drama_society(
         )
     except Exception as e:
         logger.error(f"Failed to delete drama society: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除剧社失败", 1000)
 
 
 @router.get("/societies", summary="获取剧社列表")
@@ -145,7 +149,7 @@ async def get_drama_societies(
         )
     except Exception as e:
         logger.error(f"Failed to get drama societies: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取剧社列表失败")
+        raise_business_error("获取剧社列表失败", 1000)
 
 
 # ==================== 剧本管理 ====================
@@ -172,7 +176,7 @@ async def create_script(
         )
     except Exception as e:
         logger.error(f"Failed to create script: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("创建剧本失败", 1000)
 
 
 @router.get("/{script_id}", response_model=ScriptDetailResponse, summary="获取剧本详情")
@@ -187,17 +191,17 @@ async def get_script(
         script = await script_service.get_script_by_id(script_id)
         
         if not script:
-            raise HTTPException(status_code=404, detail="剧本不存在")
+            raise_not_found_resource("剧本")
         
         return ResponseBuilder.success(
             data=script,
             message="获取剧本信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get script: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取剧本信息失败")
+        raise_business_error("获取剧本信息失败", 1000)
 
 
 @router.put("/{script_id}", response_model=ScriptResponse, summary="更新剧本信息")
@@ -223,7 +227,7 @@ async def update_script(
         )
     except Exception as e:
         logger.error(f"Failed to update script: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("更新剧本信息失败", 1000)
 
 
 @router.delete("/{script_id}", summary="删除剧本")
@@ -247,7 +251,7 @@ async def delete_script(
         )
     except Exception as e:
         logger.error(f"Failed to delete script: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除剧本失败", 1000)
 
 
 @router.get("/", summary="获取剧本列表")
@@ -293,7 +297,7 @@ async def get_scripts(
         )
     except Exception as e:
         logger.error(f"Failed to get scripts: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取剧本列表失败")
+        raise_business_error("获取剧本列表失败", 1000)
 
 
 # ==================== 章节管理 ====================
@@ -321,7 +325,7 @@ async def create_script_chapter(
         )
     except Exception as e:
         logger.error(f"Failed to create script chapter: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("创建章节失败", 1000)
 
 
 @router.get("/{script_id}/chapters/{chapter_id}", response_model=ScriptChapterResponse, summary="获取章节信息")
@@ -337,17 +341,17 @@ async def get_script_chapter(
         chapter = await script_service.get_script_chapter_by_id(chapter_id)
         
         if not chapter or chapter.script_id != script_id:
-            raise HTTPException(status_code=404, detail="章节不存在")
+            raise_not_found_resource("章节")
         
         return ResponseBuilder.success(
             data=chapter,
             message="获取章节信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get script chapter: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取章节信息失败")
+        raise_business_error("获取章节信息失败", 1000)
 
 
 @router.put("/{script_id}/chapters/{chapter_id}", response_model=ScriptChapterResponse, summary="更新章节信息")
@@ -374,7 +378,7 @@ async def update_script_chapter(
         )
     except Exception as e:
         logger.error(f"Failed to update script chapter: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("更新章节信息失败", 1000)
 
 
 @router.delete("/{script_id}/chapters/{chapter_id}", summary="删除章节")
@@ -399,7 +403,7 @@ async def delete_script_chapter(
         )
     except Exception as e:
         logger.error(f"Failed to delete script chapter: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除章节失败", 1000)
 
 
 @router.get("/{script_id}/chapters", summary="获取剧本章节列表")
@@ -419,7 +423,7 @@ async def get_script_chapters(
         )
     except Exception as e:
         logger.error(f"Failed to get script chapters: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取章节列表失败")
+        raise_business_error("获取章节列表失败", 1000)
 
 
 # ==================== 人员分配管理 ====================
@@ -446,7 +450,7 @@ async def create_script_assignment(
         )
     except Exception as e:
         logger.error(f"Failed to create script assignment: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("创建人员分配失败", 1000)
 
 
 @router.get("/assignments/{assignment_id}", response_model=ScriptAssignmentResponse, summary="获取分配信息")
@@ -461,17 +465,17 @@ async def get_script_assignment(
         assignment = await script_service.get_script_assignment_by_id(assignment_id)
         
         if not assignment:
-            raise HTTPException(status_code=404, detail="分配记录不存在")
+            raise_not_found_resource("分配记录")
         
         return ResponseBuilder.success(
             data=assignment,
             message="获取分配信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get script assignment: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取分配信息失败")
+        raise_business_error("获取分配信息失败", 1000)
 
 
 @router.put("/assignments/{assignment_id}", response_model=ScriptAssignmentResponse, summary="更新分配信息")
@@ -497,7 +501,7 @@ async def update_script_assignment(
         )
     except Exception as e:
         logger.error(f"Failed to update script assignment: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("更新分配信息失败", 1000)
 
 
 @router.delete("/assignments/{assignment_id}", summary="删除分配")
@@ -521,7 +525,7 @@ async def delete_script_assignment(
         )
     except Exception as e:
         logger.error(f"Failed to delete script assignment: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除分配失败", 1000)
 
 
 @router.get("/{script_id}/assignments", summary="获取剧本分配列表")
@@ -555,7 +559,7 @@ async def get_script_assignments(
         )
     except Exception as e:
         logger.error(f"Failed to get script assignments: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取分配列表失败")
+        raise_business_error("获取分配列表失败", 1000)
 
 
 @router.get("/users/{user_id}/assignments", summary="获取用户分配列表")
@@ -587,7 +591,7 @@ async def get_user_assignments(
         )
     except Exception as e:
         logger.error(f"Failed to get user assignments: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户分配列表失败")
+        raise_business_error("获取用户分配列表失败", 1000)
 
 
 # ==================== 批量操作和统计 ====================
@@ -618,7 +622,7 @@ async def batch_operation_scripts(
         )
     except Exception as e:
         logger.error(f"Failed to batch operation scripts: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("批量操作剧本失败", 1000)
 
 
 @router.get("/statistics/overview", response_model=ScriptStatistics, summary="获取剧本统计信息")
@@ -637,7 +641,7 @@ async def get_script_statistics(
         )
     except Exception as e:
         logger.error(f"Failed to get script statistics: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取剧本统计信息失败")
+        raise_business_error("获取剧本统计信息失败", 1000)
 
 
 # ==================== 导入导出 ====================
@@ -652,7 +656,7 @@ async def import_scripts(
     try:
         # 验证文件类型
         if not file.filename.endswith(('.json', '.csv', '.xlsx')):
-            raise HTTPException(status_code=400, detail="不支持的文件格式")
+            raise_business_error("不支持的文件格式", 1001)
         
         # 读取文件内容
         content = await file.read()
@@ -669,11 +673,11 @@ async def import_scripts(
             data=result,
             message=f"导入完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to import scripts: {str(e)}")
-        raise HTTPException(status_code=500, detail="导入失败")
+        raise_business_error("导入失败", 1000)
 
 
 @router.get("/export", summary="导出剧本")
@@ -686,7 +690,7 @@ async def export_scripts(
     """导出剧本数据"""
     try:
         if format not in ['json', 'csv', 'xlsx']:
-            raise HTTPException(status_code=400, detail="不支持的导出格式")
+            raise_business_error("不支持的导出格式", 1001)
         
         # 解析剧本ID列表
         ids = [int(id.strip()) for id in script_ids.split(',')] if script_ids else None
@@ -703,8 +707,8 @@ async def export_scripts(
             data=export_data,
             message="导出成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to export scripts: {str(e)}")
-        raise HTTPException(status_code=500, detail="导出失败")
+        raise_business_error("导出失败", 1000)

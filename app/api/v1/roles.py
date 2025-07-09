@@ -7,6 +7,9 @@ from app.core.auth import get_current_user, require_permission
 from app.core.response import ResponseBuilder
 from app.core.logger import logger, log_security_event
 from app.models.user import User
+from app.core.exceptions import (
+    raise_business_error, raise_not_found_resource, raise_server_error, BaseCustomException
+)
 from app.schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
@@ -48,7 +51,7 @@ async def create_role(
         raise
     except Exception as e:
         logger.error(f"Failed to create role: {str(e)}")
-        raise HTTPException(status_code=500, detail="创建角色失败")
+        raise_business_error("创建角色失败", 1000)
 
 
 @router.get("/detail/{role_id}", response_model=RoleResponse, summary="获取角色信息")
@@ -63,17 +66,17 @@ async def get_role(
         role = await role_service.get_role_by_id(role_id)
 
         if not role:
-            raise HTTPException(status_code=404, detail="角色不存在")
+            raise_not_found_resource("角色")
 
         return ResponseBuilder.success(
             data=role.to_dict(),
             message="获取角色信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get role: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取角色信息失败")
+        raise_business_error("获取角色信息失败", 1000)
 
 
 @router.put("/update/{role_id}", response_model=RoleResponse, summary="更新角色信息")
@@ -105,7 +108,7 @@ async def update_role(
         raise
     except Exception as e:
         logger.error(f"Failed to update role: {str(e)}")
-        raise HTTPException(status_code=500, detail="更新角色失败")
+        raise_business_error("更新角色失败", 1000)
 
 
 @router.delete("/delete/{role_id}", summary="删除角色")
@@ -130,7 +133,7 @@ async def delete_role(
         )
     except Exception as e:
         logger.error(f"Failed to delete role: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除角色失败", 1000)
 
 
 @router.get("/list", summary="获取角色列表")
@@ -214,7 +217,7 @@ async def get_roles(
         )
     except Exception as e:
         logger.error(f"Failed to get roles: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取角色列表失败")
+        raise_business_error("获取角色列表失败", 1000)
 
 
 @router.get("/stat/overview", response_model=RoleStatistics, summary="获取角色统计信息")
@@ -233,7 +236,7 @@ async def get_role_statistics(
         )
     except Exception as e:
         logger.error(f"Failed to get role statistics: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取角色统计信息失败")
+        raise_business_error("获取角色统计信息失败", 1000)
 
 
 # ==================== 权限管理 ====================
@@ -261,7 +264,7 @@ async def create_permission(
         )
     except Exception as e:
         logger.error(f"Failed to create permission: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("创建权限失败", 1000)
 
 
 @router.get("/permissions/detail/{permission_id}", response_model=PermissionResponse, summary="获取权限信息")
@@ -276,17 +279,17 @@ async def get_permission(
         permission = await role_service.get_permission_by_id(permission_id)
 
         if not permission:
-            raise HTTPException(status_code=404, detail="权限不存在")
+            raise_not_found_resource("权限")
 
         return ResponseBuilder.success(
             data=permission.to_dict(),
             message="获取权限信息成功"
         )
-    except HTTPException:
+    except BaseCustomException:
         raise
     except Exception as e:
         logger.error(f"Failed to get permission: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取权限信息失败")
+        raise_business_error("获取权限信息失败", 1000)
 
 
 @router.put("/permissions/update/{permission_id}", response_model=PermissionResponse, summary="更新权限信息")
@@ -313,7 +316,7 @@ async def update_permission(
         )
     except Exception as e:
         logger.error(f"Failed to update permission: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("更新权限失败", 1000)
 
 
 @router.delete("/permissions/delete/{permission_id}", summary="删除权限")
@@ -338,7 +341,7 @@ async def delete_permission(
         )
     except Exception as e:
         logger.error(f"Failed to delete permission: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("删除权限失败", 1000)
 
 
 @router.get("/permissions/list", response_model=PermissionListResponse, summary="获取权限列表")
@@ -377,7 +380,7 @@ async def get_permissions(
         )
     except Exception as e:
         logger.error(f"Failed to get permissions: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取权限列表失败")
+        raise_business_error("获取权限列表失败", 1000)
 
 
 # ==================== 用户角色分配 ====================
@@ -405,7 +408,7 @@ async def assign_role_to_user(
         )
     except Exception as e:
         logger.error(f"Failed to assign role: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("分配角色失败", 1000)
 
 
 @router.delete("/user/unassign", summary="移除用户角色")
@@ -431,7 +434,7 @@ async def remove_role_from_user(
         )
     except Exception as e:
         logger.error(f"Failed to remove role: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("移除角色失败", 1000)
 
 
 @router.post("/user/batch-assign", summary="批量分配角色")
@@ -457,7 +460,7 @@ async def batch_assign_roles(
         )
     except Exception as e:
         logger.error(f"Failed to batch assign roles: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_business_error("批量分配角色失败", 1000)
 
 
 @router.get("/user/{user_id}/roles", summary="获取用户角色")
@@ -480,7 +483,7 @@ async def get_user_roles(
         )
     except Exception as e:
         logger.error(f"Failed to get user roles: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户角色失败")
+        raise_business_error("获取用户角色失败", 1000)
 
 
 @router.get("/users/{role_id}", summary="获取拥有角色的用户")
@@ -508,7 +511,7 @@ async def get_role_users(
         )
     except Exception as e:
         logger.error(f"Failed to get role users: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取角色用户失败")
+        raise_business_error("获取角色用户失败", 1000)
 
 
 # ==================== 权限检查 ====================
@@ -530,7 +533,7 @@ async def get_user_permissions(
         )
     except Exception as e:
         logger.error(f"Failed to get user permissions: {str(e)}")
-        raise HTTPException(status_code=500, detail="获取用户权限失败")
+        raise_business_error("获取用户权限失败", 1000)
 
 
 @router.post("/permission/check", summary="检查用户权限")
@@ -551,7 +554,7 @@ async def check_user_permission(
         )
     except Exception as e:
         logger.error(f"Failed to check user permission: {str(e)}")
-        raise HTTPException(status_code=500, detail="权限检查失败")
+        raise_business_error("权限检查失败", 1000)
 
 
 # ==================== 系统初始化 ====================
@@ -578,4 +581,4 @@ async def init_system_roles(
         )
     except Exception as e:
         logger.error(f"Failed to init system roles: {str(e)}")
-        raise HTTPException(status_code=500, detail="系统初始化失败")
+        raise_business_error("系统初始化失败", 1000)

@@ -29,7 +29,12 @@ class BaseCustomException(Exception):
 
 class BusinessException(BaseCustomException):
     """业务异常"""
-    pass
+    
+    def __init__(self, message: str, business_code: int = 1000, **kwargs):
+        # 业务异常统一返回HTTP 200，通过business_code区分具体错误
+        kwargs.setdefault("status_code", status.HTTP_200_OK)
+        super().__init__(message, **kwargs)
+        self.business_code = business_code
 
 
 class ValidationException(BaseCustomException):
@@ -248,7 +253,11 @@ async def custom_exception_handler(request: Request, exc: BaseCustomException):
         "ConfigurationException": 1000,    # 配置异常
     }
     
-    business_code = exception_code_mapping.get(exc.error_code, 1000)
+    # 处理BusinessException，使用其自定义的business_code
+    if isinstance(exc, BusinessException):
+        business_code = exc.business_code
+    else:
+        business_code = exception_code_mapping.get(exc.error_code, 1000)
     
     # 翻译错误信息为中文
     translated_message = translate_error_message(exc)
@@ -668,9 +677,60 @@ def raise_permission_error(message: str = "Access denied"):
     raise AuthorizationException(message)
 
 
-def raise_business_error(message: str, error_code: str = None):
+def raise_business_error(message: str, business_code: int = 1000):
     """抛出业务异常"""
-    raise BusinessException(message, error_code)
+    raise BusinessException(message, business_code)
+
+
+# 常用业务异常快捷方式
+def raise_user_not_found():
+    """抛出用户不存在异常"""
+    raise BusinessException("用户不存在", 3009)
+
+
+def raise_username_exists():
+    """抛出用户名已存在异常"""
+    raise BusinessException("用户名已存在", 3003)
+
+
+def raise_email_exists():
+    """抛出邮箱已存在异常"""
+    raise BusinessException("邮箱已存在", 3005)
+
+
+def raise_invalid_credentials():
+    """抛出用户名或密码错误异常"""
+    raise BusinessException("用户名或密码错误", 2001)
+
+
+def raise_unauthorized():
+    """抛出未登录异常"""
+    raise BusinessException("未登录", 2001)
+
+
+def raise_forbidden():
+    """抛出权限不足异常"""
+    raise BusinessException("权限不足", 2003)
+
+
+def raise_not_found_resource(resource_name: str):
+    """抛出资源不存在异常"""
+    raise BusinessException(f"{resource_name}不存在", 1005)
+
+
+def raise_duplicate_resource(resource_name: str):
+    """抛出资源重复异常"""
+    raise BusinessException(f"{resource_name}已存在", 1003)
+
+
+def raise_invalid_operation(message: str = "操作无效"):
+    """抛出无效操作异常"""
+    raise BusinessException(message, 1003)
+
+
+def raise_server_error(message: str = "服务器内部错误"):
+    """抛出服务器错误异常"""
+    raise BusinessException(message, 1000)
 
 
 def raise_external_service_error(service: str, operation: str = None):

@@ -11,6 +11,11 @@ from app.core.auth import AuthManager, get_current_user, get_current_active_user
 from app.core.response import ResponseBuilder
 from app.core.logger import logger, log_security_event, log_auth_attempt
 from app.core.config import settings
+from app.core.exceptions import (
+    raise_invalid_credentials, raise_unauthorized, raise_forbidden,
+    raise_user_not_found, raise_business_error, raise_server_error,
+    BaseCustomException
+)
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.schemas.auth import (
@@ -129,11 +134,7 @@ async def login(
                 success=False,
                 ip="unknown"
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise_invalid_credentials()
         
         if not user.is_active:
             log_auth_attempt(
@@ -141,10 +142,7 @@ async def login(
                 success=False,
                 ip="unknown"
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户账户已被禁用"
-            )
+            raise_business_error("用户账户已被禁用", 2004)
         
         # 生成访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -192,14 +190,9 @@ async def login(
             data=login_data_response
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Login failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="登录失败，请稍后重试"
-        )
+        raise_business_error("登录失败，请稍后重试", 1000)
 
 
 @router.post("/login/form", response_model=LoginResponse, summary="表单登录")
@@ -223,11 +216,7 @@ async def login_for_access_token(
                 success=False,
                 ip="unknown"
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise_invalid_credentials()
         
         if not user.is_active:
             log_auth_attempt(
@@ -235,10 +224,7 @@ async def login_for_access_token(
                 success=False,
                 ip="unknown"
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户账户已被禁用"
-            )
+            raise_business_error("用户账户已被禁用", 2004)
         
         # 生成访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -285,14 +271,9 @@ async def login_for_access_token(
             data=login_data_response
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Form login failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="登录失败，请稍后重试"
-        )
+        raise_business_error("登录失败，请稍后重试", 1000)
 
 
 @router.post("/refresh", response_model=Token, summary="刷新令牌")
@@ -307,20 +288,14 @@ async def refresh_token(
         user_id = int(payload.get("sub"))
         
         if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的刷新令牌"
-            )
+            raise_business_error("无效的刷新令牌", 2002)
         
         # 获取用户信息
         user_service = UserService(db)
         user = await user_service.get_user_by_id(user_id)
         
         if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户不存在或已被禁用"
-            )
+            raise_business_error("用户不存在或已被禁用", 2001)
         
         # 生成新的访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -349,14 +324,9 @@ async def refresh_token(
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Token refresh failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="令牌刷新失败"
-        )
+        raise_business_error("令牌刷新失败", 2002)
 
 
 @router.post("/logout", summary="用户登出")
@@ -377,10 +347,7 @@ async def logout(
         
     except Exception as e:
         logger.error(f"Logout failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="登出失败"
-        )
+        raise_business_error("登出失败", 1000)
 
 
 @router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
@@ -406,10 +373,7 @@ async def change_password(
         
         # 验证当前密码
         if not auth_manager.verify_password(password_data.current_password, current_user.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="当前密码错误"
-            )
+            raise_business_error("当前密码错误", 3010)
         
         # 更新密码
         from app.schemas.user import UserPasswordUpdate
@@ -430,14 +394,9 @@ async def change_password(
             message="密码修改成功"
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Change password failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="密码修改失败"
-        )
+        raise_business_error("密码修改失败", 1000)
 
 
 @router.post("/forgot-password", summary="忘记密码")
@@ -478,10 +437,7 @@ async def forgot_password(
         
     except Exception as e:
         logger.error(f"Forgot password failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="密码重置请求失败"
-        )
+        raise_business_error("密码重置请求失败", 1000)
 
 
 @router.post("/reset-password", summary="重置密码")
@@ -497,20 +453,14 @@ async def reset_password(
         token_type = payload.get("type")
         
         if user_id is None or token_type != "password_reset":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="无效的重置令牌"
-            )
+            raise_business_error("无效的重置令牌", 2002)
         
         # 获取用户
         user_service = UserService(db)
         user = await user_service.get_user_by_id(user_id)
         
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户不存在"
-            )
+            raise_user_not_found()
         
         # 更新密码
         new_password_hash = auth_manager.get_password_hash(reset_data.new_password)
@@ -529,14 +479,9 @@ async def reset_password(
             message="密码重置成功"
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Reset password failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="密码重置失败"
-        )
+        raise_business_error("密码重置失败", 1000)
 
 
 @router.get("/verify-token", summary="验证令牌")
