@@ -255,3 +255,7 @@ class UserStatistics(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# 为了向后兼容，创建别名
+PasswordChange = UserPasswordUpdate

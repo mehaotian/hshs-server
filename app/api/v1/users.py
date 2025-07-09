@@ -13,7 +13,7 @@ from app.models.user import User
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, UserListResponse,
     UserProfileCreate, UserProfileUpdate, UserProfileResponse,
-    UserPasswordUpdate, UserSearchQuery, UserBatchOperation,
+    UserPasswordUpdate, PasswordChange, UserSearchQuery, UserBatchOperation,
     UserStatistics
 )
 from app.services.user import UserService
@@ -21,7 +21,7 @@ from app.services.user import UserService
 router = APIRouter()
 
 
-@router.post("/", response_model=UserResponse, summary="创建用户")
+@router.post("/add", response_model=UserResponse, summary="创建用户")
 async def create_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
@@ -48,8 +48,8 @@ async def create_user(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
-async def get_current_user_info(
+@router.get("/profile", response_model=UserResponse, summary="获取当前用户信息")
+async def get_current_user(
     current_user: User = Depends(get_current_active_user)
 ):
     """获取当前登录用户的信息"""
@@ -59,7 +59,7 @@ async def get_current_user_info(
     )
 
 
-@router.put("/me", response_model=UserResponse, summary="更新当前用户信息")
+@router.put("/update-profile", response_model=UserResponse, summary="更新当前用户信息")
 async def update_current_user(
     user_data: UserUpdate,
     db: AsyncSession = Depends(get_db),
@@ -85,9 +85,9 @@ async def update_current_user(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/me/password", summary="修改当前用户密码")
-async def change_current_user_password(
-    password_data: UserPasswordUpdate,
+@router.put("/change-password", summary="修改当前用户密码")
+async def change_password(
+    password_data: PasswordChange,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -110,7 +110,7 @@ async def change_current_user_password(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{user_id}", response_model=UserResponse, summary="获取用户信息")
+@router.get("/detail/{user_id}", response_model=UserResponse, summary="获取用户信息")
 async def get_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
@@ -135,7 +135,7 @@ async def get_user(
         raise HTTPException(status_code=500, detail="获取用户信息失败")
 
 
-@router.put("/{user_id}", response_model=UserResponse, summary="更新用户信息")
+@router.put("/update/{user_id}", response_model=UserResponse, summary="更新用户信息")
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
@@ -163,7 +163,7 @@ async def update_user(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{user_id}", summary="删除用户")
+@router.delete("/delete/{user_id}", summary="删除用户")
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
@@ -188,7 +188,7 @@ async def delete_user(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", response_model=UserListResponse, summary="获取用户列表")
+@router.get("/list", response_model=UserListResponse, summary="获取用户列表")
 async def get_users(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -230,7 +230,7 @@ async def get_users(
         raise HTTPException(status_code=500, detail="获取用户列表失败")
 
 
-@router.post("/batch", summary="批量操作用户")
+@router.post("/batch-operation", summary="批量操作用户")
 async def batch_operation_users(
     operation: UserBatchOperation,
     db: AsyncSession = Depends(get_db),
@@ -261,7 +261,7 @@ async def batch_operation_users(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/statistics/overview", response_model=UserStatistics, summary="获取用户统计信息")
+@router.get("/stats", response_model=UserStatistics, summary="获取用户统计信息")
 async def get_user_statistics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("user:read"))
