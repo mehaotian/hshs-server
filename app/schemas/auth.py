@@ -167,28 +167,52 @@ class PasswordChange(BaseModel):
         }
 
 
-class LoginResponse(BaseModel):
-    """登录响应模型"""
+class LoginData(BaseModel):
+    """登录数据模型"""
     
-    user: dict = Field(..., description="用户信息")
-    token: Token = Field(..., description="令牌信息")
+    avatar: Optional[str] = Field(None, description="用户头像")
+    username: str = Field(..., description="用户名")
+    nickname: str = Field(..., description="昵称")
+    roles: list[str] = Field(default_factory=list, description="用户角色列表")
+    permissions: list[str] = Field(default_factory=list, description="用户权限列表")
+    access_token: str = Field(..., description="访问令牌")
+    refresh_token: str = Field(..., description="刷新令牌")
+    expires: str = Field(..., description="过期时间戳（毫秒）")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "user": {
-                    "id": 1,
-                    "username": "testuser",
-                    "email": "user@example.com",
-                    "full_name": "张三",
-                    "is_active": True,
-                    "created_at": "2024-01-01T00:00:00Z"
-                },
-                "token": {
-                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                    "token_type": "bearer",
-                    "expires_in": 3600
+                "avatar": "https://avatars.githubusercontent.com/u/44761321",
+                "username": "admin",
+                "nickname": "鹅子",
+                "roles": ["admin"],
+                "permissions": ["*:*:*"],
+                "access_token": "eyJhbGciOiJIUzUxMiJ9.admin",
+                "refresh_token": "eyJhbGciOiJIUzUxMiJ9.adminRefresh",
+                "expires": "1951200000000"
+            }
+        }
+
+
+class LoginResponse(BaseModel):
+    """登录响应模型"""
+    
+    code: int = Field(default=0, description="响应状态码")
+    data: LoginData = Field(..., description="登录数据")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "code": 0,
+                "data": {
+                    "avatar": "https://avatars.githubusercontent.com/u/44761321",
+                    "username": "admin",
+                    "nickname": "鹅子",
+                    "roles": ["admin"],
+                    "permissions": ["*:*:*"],
+                    "access_token": "eyJhbGciOiJIUzUxMiJ9.admin",
+                    "refresh_token": "eyJhbGciOiJIUzUxMiJ9.adminRefresh",
+                    "expires": "1951200000000"
                 }
             }
         }

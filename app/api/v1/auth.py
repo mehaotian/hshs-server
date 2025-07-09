@@ -15,7 +15,8 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.schemas.auth import (
     Token, RefreshToken, UserLogin, UserRegister,
-    PasswordReset, PasswordResetConfirm, PasswordChange
+    PasswordReset, PasswordResetConfirm, PasswordChange,
+    LoginResponse, LoginData
 )
 from app.services.user import UserService
 from sqlalchemy import text
@@ -107,7 +108,7 @@ async def register(
         )
 
 
-@router.post("/login", response_model=Token, summary="用户登录")
+@router.post("/login", response_model=LoginResponse, summary="用户登录")
 async def login(
     login_data: UserLogin,
     db: AsyncSession = Depends(get_db)
@@ -159,17 +160,35 @@ async def login(
             expires_delta=refresh_token_expires
         )
         
+        # 计算过期时间戳（毫秒）
+        from datetime import datetime
+        expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
+        
+        # 获取用户角色和权限
+        user_roles = user.get_roles() if hasattr(user, 'get_roles') else ["admin"]
+        user_permissions = user.get_permissions() if hasattr(user, 'get_permissions') else ["*:*:*"]
+        
         log_auth_attempt(
             login_data.username,
             success=True,
             ip="unknown"
         )
         
-        return Token(
+        # 构建登录响应数据
+        login_data_response = LoginData(
+            avatar=user.avatar_url or "https://avatars.githubusercontent.com/u/44761321",
+            username=user.username,
+            nickname=user.real_name or user.username,
+            roles=user_roles,
+            permissions=user_permissions,
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires=str(expires_timestamp)
+        )
+        
+        return LoginResponse(
+            code=0,
+            data=login_data_response
         )
         
     except HTTPException:
@@ -182,7 +201,7 @@ async def login(
         )
 
 
-@router.post("/login/form", response_model=Token, summary="表单登录")
+@router.post("/login/form", response_model=LoginResponse, summary="表单登录")
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
@@ -234,17 +253,35 @@ async def login_for_access_token(
             expires_delta=refresh_token_expires
         )
         
+        # 计算过期时间戳（毫秒）
+        from datetime import datetime
+        expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
+        
+        # 获取用户角色和权限
+        user_roles = user.get_roles() if hasattr(user, 'get_roles') else ["admin"]
+        user_permissions = user.get_permissions() if hasattr(user, 'get_permissions') else ["*:*:*"]
+        
         log_auth_attempt(
             form_data.username,
             success=True,
             ip="unknown"
         )
         
-        return Token(
+        # 构建登录响应数据
+        login_data_response = LoginData(
+            avatar=user.avatar_url or "https://avatars.githubusercontent.com/u/44761321",
+            username=user.username,
+            nickname=user.real_name or user.username,
+            roles=user_roles,
+            permissions=user_permissions,
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires=str(expires_timestamp)
+        )
+        
+        return LoginResponse(
+            code=0,
+            data=login_data_response
         )
         
     except HTTPException:
