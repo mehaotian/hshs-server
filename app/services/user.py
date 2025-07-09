@@ -269,9 +269,6 @@ class UserService:
         user = await AuthManager.authenticate_user(self.db, username, password)
         
         if user:
-            # 更新最后登录时间
-            user.last_login = datetime.utcnow()
-            await self.db.commit()
             logger.info(f"User authenticated: {user.username} (ID: {user.id})")
         
         return user

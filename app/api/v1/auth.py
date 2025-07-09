@@ -162,6 +162,10 @@ async def login(
         from datetime import datetime
         expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
         
+        # 更新用户登录信息
+        user.update_login_info()
+        await db.commit()
+        
         # 获取用户角色和权限
         user_roles = await user.get_roles(db) if hasattr(user, 'get_roles') else ["admin"]
         user_permissions = await user.get_permissions(db) if hasattr(user, 'get_permissions') else ["*:*:*"]
@@ -243,6 +247,10 @@ async def login_for_access_token(
         # 计算过期时间戳（毫秒）
         from datetime import datetime
         expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
+        
+        # 更新用户登录信息
+        user.update_login_info()
+        await db.commit()
         
         # 获取用户角色和权限
         user_roles = await user.get_roles(db) if hasattr(user, 'get_roles') else ["admin"]

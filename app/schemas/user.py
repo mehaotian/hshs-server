@@ -1,3 +1,4 @@
+import email
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -63,6 +64,8 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """更新用户模型"""
     real_name: Optional[str] = Field(None, max_length=50, description="真实姓名")
+    email: Optional[EmailStr] = Field(None, description="邮箱")
+    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
     phone: Optional[str] = Field(None, max_length=20, description="手机号")
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
     bio: Optional[str] = Field(None, max_length=500, description="个人简介")

@@ -219,7 +219,7 @@ async def get_users(
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: Optional[str] = Query(None, description="搜索关键词"),
     status: Optional[str] = Query(None, description="用户状态"),
-    role_id: Optional[int] = Query(None, description="角色ID"),
+    role_id: Optional[str] = Query(None, description="角色ID"),
     created_after: Optional[str] = Query(None, description="创建时间起始"),
     created_before: Optional[str] = Query(None, description="创建时间结束"),
     sort_by: Optional[str] = Query("created_at", description="排序字段"),
@@ -230,11 +230,25 @@ async def get_users(
     """获取用户列表（支持搜索和分页）"""
     try:
         # 构建搜索查询
+        # 处理role_id参数：空字符串或None都视为无角色筛选
+        role_filter = None
+        if role_id and role_id.strip():  # 只有非空且非空白字符串才作为有效的角色筛选
+            try:
+                # 尝试将字符串转换为整数，然后再转回字符串（验证格式）
+                int(role_id)
+                role_filter = role_id
+            except ValueError:
+                # 如果不是有效的整数字符串，忽略该参数
+                pass
+        
         search_query = UserSearchQuery(
             keyword=keyword,
             status=status,
+            role=role_filter,
             created_after=created_after,
             created_before=created_before,
+            page=page,
+            page_size=size,
             order_by=sort_by or "created_at",
             order_desc=sort_order == "desc"
         )
