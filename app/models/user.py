@@ -50,33 +50,67 @@ class User(Base):
         """获取显示名称"""
         return self.real_name or self.username
     
-    def get_roles(self) -> List[str]:
+    async def get_roles(self, db=None) -> List[str]:
         """获取用户角色列表"""
-        return [user_role.role.name for user_role in self.user_roles if user_role.role]
+        if db is None:
+            # 如果没有传入db会话，尝试从已加载的关系中获取
+            return [user_role.role.name for user_role in self.user_roles if user_role.role]
+        
+        # 使用数据库会话查询角色
+        from sqlalchemy import select
+        from app.models.role import UserRole, Role
+        
+        result = await db.execute(
+            select(Role.name)
+            .join(UserRole, Role.id == UserRole.role_id)
+            .where(UserRole.user_id == self.id)
+        )
+        return [row[0] for row in result.fetchall()]
     
-    def has_role(self, role_name: str) -> bool:
+    async def has_role(self, role_name: str, db=None) -> bool:
         """检查用户是否拥有指定角色"""
-        return role_name in self.get_roles()
+        roles = await self.get_roles(db)
+        return role_name in roles
     
-    def get_permissions(self) -> List[str]:
+    async def get_permissions(self, db=None) -> List[str]:
         """获取用户所有权限"""
+        if db is None:
+            # 如果没有传入db会话，尝试从已加载的关系中获取
+            permissions = set()
+            for user_role in self.user_roles:
+                if user_role.role and user_role.role.permissions:
+                    role_permissions = user_role.role.permissions.get('permissions', [])
+                    permissions.update(role_permissions)
+            return list(permissions)
+        
+        # 使用数据库会话查询权限
+        from sqlalchemy import select
+        from app.models.role import UserRole, Role
+        
+        result = await db.execute(
+            select(Role.permissions)
+            .join(UserRole, Role.id == UserRole.role_id)
+            .where(UserRole.user_id == self.id)
+        )
+        
         permissions = set()
-        for user_role in self.user_roles:
-            if user_role.role and user_role.role.permissions:
-                role_permissions = user_role.role.permissions.get('permissions', [])
+        for row in result.fetchall():
+            if row[0] and isinstance(row[0], dict):
+                role_permissions = row[0].get('permissions', [])
                 permissions.update(role_permissions)
         return list(permissions)
     
-    def has_permission(self, permission: str) -> bool:
+    async def has_permission(self, permission: str, db=None) -> bool:
         """检查用户是否拥有指定权限"""
-        return permission in self.get_permissions()
+        permissions = await self.get_permissions(db)
+        return permission in permissions
     
     def update_login_info(self) -> None:
         """更新登录信息"""
         self.last_login_at = datetime.utcnow()
         self.login_count += 1
     
-    def to_dict(self, include_sensitive: bool = False) -> Dict[str, Any]:
+    async def to_dict(self, include_sensitive: bool = False, db=None) -> Dict[str, Any]:
         """转换为字典格式"""
         data = {
             'id': self.id,
@@ -93,13 +127,55 @@ class User(Base):
             'settings': self.settings,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'roles': self.get_roles(),
+            'roles': await self.get_roles(db),
             'display_name': self.display_name,
             'is_active': self.is_active,
         }
         
         if include_sensitive:
-            data['permissions'] = self.get_permissions()
+            data['permissions'] = await self.get_permissions(db)
+        
+        return data
+    
+    def to_dict_sync(self, include_sensitive: bool = False) -> Dict[str, Any]:
+        """同步版本的转换为字典格式（用于不需要数据库查询的场景）"""
+        # 尝试从已加载的关系中获取角色
+        try:
+            roles = [user_role.role.name for user_role in self.user_roles if user_role.role]
+        except:
+            roles = []
+        
+        data = {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'real_name': self.real_name,
+            'avatar_url': self.avatar_url,
+            'phone': self.phone,
+            'wechat': self.wechat,
+            'bio': self.bio,
+            'status': self.status,
+            'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+            'login_count': self.login_count,
+            'settings': self.settings,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'roles': roles,
+            'display_name': self.display_name,
+            'is_active': self.is_active,
+        }
+        
+        if include_sensitive:
+            # 尝试从已加载的关系中获取权限
+            try:
+                permissions = set()
+                for user_role in self.user_roles:
+                    if user_role.role and user_role.role.permissions:
+                        role_permissions = user_role.role.permissions.get('permissions', [])
+                        permissions.update(role_permissions)
+                data['permissions'] = list(permissions)
+            except:
+                data['permissions'] = []
         
         return data
 

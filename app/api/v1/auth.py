@@ -165,8 +165,8 @@ async def login(
         expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
         
         # 获取用户角色和权限
-        user_roles = user.get_roles() if hasattr(user, 'get_roles') else ["admin"]
-        user_permissions = user.get_permissions() if hasattr(user, 'get_permissions') else ["*:*:*"]
+        user_roles = await user.get_roles(db) if hasattr(user, 'get_roles') else ["admin"]
+        user_permissions = await user.get_permissions(db) if hasattr(user, 'get_permissions') else ["*:*:*"]
         
         log_auth_attempt(
             login_data.username,
@@ -176,7 +176,8 @@ async def login(
         
         # 构建登录响应数据
         login_data_response = LoginData(
-            avatar=user.avatar_url or "https://avatars.githubusercontent.com/u/44761321",
+            # 这里头像可以放一个缺省值
+            avatar=user.avatar_url or '',
             username=user.username,
             nickname=user.real_name or user.username,
             roles=user_roles,
@@ -258,8 +259,8 @@ async def login_for_access_token(
         expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
         
         # 获取用户角色和权限
-        user_roles = user.get_roles() if hasattr(user, 'get_roles') else ["admin"]
-        user_permissions = user.get_permissions() if hasattr(user, 'get_permissions') else ["*:*:*"]
+        user_roles = await user.get_roles(db) if hasattr(user, 'get_roles') else ["admin"]
+        user_permissions = await user.get_permissions(db) if hasattr(user, 'get_permissions') else ["*:*:*"]
         
         log_auth_attempt(
             form_data.username,
