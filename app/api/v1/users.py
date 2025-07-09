@@ -8,8 +8,8 @@ from app.core.auth import (
     require_permission, require_role
 )
 from app.core.response import ResponseBuilder
-from app.core.logger import logger
-from app.models.user import User
+from app.core.logger import logger, log_security_event
+from app.models.user import User, UserProfile
 from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, UserListResponse,
     UserProfileCreate, UserProfileUpdate, UserProfileResponse,
@@ -19,6 +19,11 @@ from app.schemas.user import (
 from app.services.user import UserService
 
 router = APIRouter()
+
+
+# 注意：现在直接使用模型的 to_dict 方法进行序列化
+# User 模型使用 to_dict_sync() 方法
+# UserProfile 模型使用 to_dict() 方法
 
 
 @router.post("/add", response_model=UserResponse, summary="创建用户")
@@ -32,15 +37,14 @@ async def create_user(
         user_service = UserService(db)
         user = await user_service.create_user(user_data)
         
-        logger.log_security_event(
+        log_security_event(
             "user_created",
             user_id=current_user.id,
-            target_user_id=user.id,
-            details={"username": user.username, "email": user.email}
+            details=f"target_user_id: {user.id}, username: {user.username}, email: {user.email}"
         )
         
         return ResponseBuilder.success(
-            data=user,
+            data=user.to_dict_sync(),
             message="用户创建成功"
         )
     except Exception as e:
@@ -54,7 +58,7 @@ async def get_current_user(
 ):
     """获取当前登录用户的信息"""
     return ResponseBuilder.success(
-        data=current_user,
+        data=current_user.to_dict_sync(),
         message="获取用户信息成功"
     )
 
@@ -70,14 +74,14 @@ async def update_current_user(
         user_service = UserService(db)
         updated_user = await user_service.update_user(current_user.id, user_data)
         
-        logger.log_security_event(
+        log_security_event(
             "user_updated",
             user_id=current_user.id,
-            details={"updated_fields": list(user_data.dict(exclude_unset=True).keys())}
+            details=f"updated_fields: {list(user_data.dict(exclude_unset=True).keys())}"
         )
         
         return ResponseBuilder.success(
-            data=updated_user,
+            data=updated_user.to_dict_sync(),
             message="用户信息更新成功"
         )
     except Exception as e:
@@ -96,10 +100,10 @@ async def change_password(
         user_service = UserService(db)
         await user_service.update_password(current_user.id, password_data)
         
-        logger.log_security_event(
+        log_security_event(
             "password_changed",
             user_id=current_user.id,
-            details={"changed_by_self": True}
+            details="changed_by_self: True"
         )
         
         return ResponseBuilder.success(
@@ -125,7 +129,7 @@ async def get_user(
             raise HTTPException(status_code=404, detail="用户不存在")
         
         return ResponseBuilder.success(
-            data=user,
+            data=user.to_dict_sync(),
             message="获取用户信息成功"
         )
     except HTTPException:
@@ -147,15 +151,14 @@ async def update_user(
         user_service = UserService(db)
         updated_user = await user_service.update_user(user_id, user_data)
         
-        logger.log_security_event(
+        log_security_event(
             "user_updated",
             user_id=current_user.id,
-            target_user_id=user_id,
-            details={"updated_fields": list(user_data.dict(exclude_unset=True).keys())}
+            details=f"target_user_id: {user_id}, updated_fields: {list(user_data.dict(exclude_unset=True).keys())}"
         )
         
         return ResponseBuilder.success(
-            data=updated_user,
+            data=updated_user.to_dict_sync(),
             message="用户信息更新成功"
         )
     except Exception as e:
@@ -174,10 +177,10 @@ async def delete_user(
         user_service = UserService(db)
         await user_service.delete_user(user_id)
         
-        logger.log_security_event(
+        log_security_event(
             "user_deleted",
             user_id=current_user.id,
-            target_user_id=user_id
+            details=f"target_user_id: {user_id}"
         )
         
         return ResponseBuilder.success(
@@ -240,15 +243,10 @@ async def batch_operation_users(
         user_service = UserService(db)
         result = await user_service.batch_operation(operation)
         
-        logger.log_security_event(
+        log_security_event(
             "user_batch_operation",
             user_id=current_user.id,
-            details={
-                "operation": operation.operation,
-                "user_count": len(operation.user_ids),
-                "success_count": result["success_count"],
-                "failed_count": result["failed_count"]
-            }
+            details=f"operation: {operation.operation}, user_count: {len(operation.user_ids)}, success_count: {result['success_count']}, failed_count: {result['failed_count']}"
         )
         
         return ResponseBuilder.success(
@@ -293,7 +291,7 @@ async def create_user_profile(
         profile = await user_service.create_user_profile(current_user.id, profile_data)
         
         return ResponseBuilder.success(
-            data=profile,
+            data=profile.to_dict(),
             message="用户档案创建成功"
         )
     except Exception as e:
@@ -315,7 +313,7 @@ async def get_user_profile(
             raise HTTPException(status_code=404, detail="用户档案不存在")
         
         return ResponseBuilder.success(
-            data=profile,
+            data=profile.to_dict(),
             message="获取用户档案成功"
         )
     except HTTPException:
@@ -337,7 +335,7 @@ async def update_user_profile(
         updated_profile = await user_service.update_user_profile(current_user.id, profile_data)
         
         return ResponseBuilder.success(
-            data=updated_profile,
+            data=updated_profile.to_dict(),
             message="用户档案更新成功"
         )
     except Exception as e:
@@ -360,7 +358,7 @@ async def get_user_profile_by_id(
             raise HTTPException(status_code=404, detail="用户档案不存在")
         
         return ResponseBuilder.success(
-            data=profile,
+            data=profile.to_dict(),
             message="获取用户档案成功"
         )
     except HTTPException:

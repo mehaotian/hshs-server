@@ -204,3 +204,19 @@ class UserProfile(Base):
     
     def __repr__(self) -> str:
         return f"<UserProfile(user_id={self.user_id})>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'cv_experience': self.cv_experience,
+            'voice_characteristics': self.voice_characteristics,
+            'specialties': self.specialties,
+            'equipment_info': self.equipment_info,
+            'work_schedule': self.work_schedule,
+            'emergency_contact': self.emergency_contact,
+            'emergency_phone': self.emergency_phone,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
