@@ -549,9 +549,10 @@ class RoleService:
         )
         return list(result.scalars().all())
     
-    async def get_role_users(self, role_id: int) -> List[User]:
-        """获取拥有指定角色的所有用户"""
-        result = await self.db.execute(
+    async def get_role_users(self, role_id: int, page: int = 1, size: int = 20) -> Tuple[List[User], int]:
+        """获取拥有指定角色的所有用户（支持分页）"""
+        # 基础查询
+        base_query = (
             select(User)
             .join(UserRole, User.id == UserRole.user_id)
             .where(UserRole.role_id == role_id)
@@ -562,7 +563,31 @@ class RoleService:
                 )
             )
         )
-        return list(result.scalars().all())
+        
+        # 获取总数
+        count_query = (
+            select(func.count(User.id))
+            .join(UserRole, User.id == UserRole.user_id)
+            .where(UserRole.role_id == role_id)
+            .where(
+                or_(
+                    UserRole.expires_at.is_(None),
+                    UserRole.expires_at > datetime.utcnow()
+                )
+            )
+        )
+        
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
+        
+        # 分页查询
+        offset = (page - 1) * size
+        query = base_query.order_by(User.created_at.desc()).offset(offset).limit(size)
+        
+        result = await self.db.execute(query)
+        users = list(result.scalars().all())
+        
+        return users, total
     
     async def check_user_permission(self, user_id: int, permission_name: str) -> bool:
         """检查用户是否有指定权限"""
@@ -575,6 +600,24 @@ class RoleService:
                 return True
         
         return False
+    
+    async def get_user_permissions(self, user_id: int) -> List[str]:
+        """获取用户的所有权限"""
+        from ..models.user import User
+        from sqlalchemy import select
+        
+        # 获取用户
+        result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            from ..core.exceptions import raise_not_found
+            raise_not_found("User", user_id)
+        
+        # 获取用户权限
+        return await user.get_permissions(self.db)
     
     async def get_role_statistics(self) -> Dict[str, Any]:
         """获取角色统计信息"""

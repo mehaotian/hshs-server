@@ -33,7 +33,13 @@ class Role(Base):
         """获取权限列表"""
         if not self.permissions:
             return []
-        return self.permissions.get('permissions', [])
+        # 兼容处理：如果permissions是列表，直接返回；如果是字典，取permissions字段
+        if isinstance(self.permissions, list):
+            return self.permissions
+        elif isinstance(self.permissions, dict):
+            return self.permissions.get('permissions', [])
+        else:
+            return []
     
     def has_permission(self, permission: str) -> bool:
         """检查角色是否拥有指定权限"""
@@ -44,20 +50,36 @@ class Role(Base):
         if not self.permissions:
             self.permissions = {'permissions': []}
         
-        permissions = self.permissions.get('permissions', [])
-        if permission not in permissions:
-            permissions.append(permission)
+        # 兼容处理：统一转换为字典格式
+        if isinstance(self.permissions, list):
+            permissions = self.permissions
+            if permission not in permissions:
+                permissions.append(permission)
             self.permissions = {'permissions': permissions}
+        elif isinstance(self.permissions, dict):
+            permissions = self.permissions.get('permissions', [])
+            if permission not in permissions:
+                permissions.append(permission)
+                self.permissions = {'permissions': permissions}
+        else:
+            self.permissions = {'permissions': [permission]}
     
     def remove_permission(self, permission: str) -> None:
         """移除权限"""
         if not self.permissions:
             return
         
-        permissions = self.permissions.get('permissions', [])
-        if permission in permissions:
-            permissions.remove(permission)
+        # 兼容处理：统一转换为字典格式
+        if isinstance(self.permissions, list):
+            permissions = self.permissions
+            if permission in permissions:
+                permissions.remove(permission)
             self.permissions = {'permissions': permissions}
+        elif isinstance(self.permissions, dict):
+            permissions = self.permissions.get('permissions', [])
+            if permission in permissions:
+                permissions.remove(permission)
+                self.permissions = {'permissions': permissions}
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""

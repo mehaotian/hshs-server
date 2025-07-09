@@ -437,7 +437,7 @@ class UserService:
         )
         return list(result.scalars().all())
     
-    async def get_user_roles(self, user_id: int) -> List[Role]:
+    async def get_user_roles(self, user_id: int) -> List[str]:
         """获取用户角色"""
         user = await self.get_user_by_id(user_id)
         if not user:

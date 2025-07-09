@@ -104,6 +104,7 @@ class RoleCreate(RoleBase):
 
 class RoleUpdate(BaseModel):
     """更新角色模型"""
+    name: Optional[str] = Field(None, max_length=100, description="角色名称")
     display_name: Optional[str] = Field(
         None, max_length=100, description="显示名称")
     description: Optional[str] = Field(
