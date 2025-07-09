@@ -168,6 +168,67 @@ def create_error_response(
     return response
 
 
+def translate_error_message(exc: BaseCustomException) -> str:
+    """翻译错误信息为中文"""
+    if isinstance(exc, DuplicateResourceException):
+        # 资源名称映射
+        resource_names = {
+            "Role": "角色",
+            "User": "用户",
+            "Permission": "权限",
+            "Script": "剧本",
+            "Audio": "音频",
+            "Project": "项目"
+        }
+        
+        # 字段名称映射
+        field_names = {
+            "name": "名称",
+            "username": "用户名",
+            "email": "邮箱",
+            "title": "标题"
+        }
+        
+        resource = exc.details.get("resource", "")
+        field = exc.details.get("field", "")
+        value = exc.details.get("value", "")
+        
+        resource_cn = resource_names.get(resource, resource)
+        field_cn = field_names.get(field, field)
+        
+        if field and value:
+            return f"{resource_cn}已存在 ({field_cn}: {value})"
+        else:
+            return f"{resource_cn}已存在"
+    
+    elif isinstance(exc, ResourceNotFoundException):
+        resource_names = {
+            "Role": "角色",
+            "User": "用户",
+            "Permission": "权限",
+            "Script": "剧本",
+            "Audio": "音频",
+            "Project": "项目"
+        }
+        
+        resource = exc.details.get("resource", "")
+        resource_cn = resource_names.get(resource, resource)
+        return f"{resource_cn}不存在"
+    
+    elif isinstance(exc, ValidationException):
+        # 对于验证异常，直接返回原始消息（通常已经是中文）
+        return exc.message
+    
+    elif isinstance(exc, AuthenticationException):
+        return "认证失败，请重新登录"
+    
+    elif isinstance(exc, AuthorizationException):
+        return "权限不足，无法执行此操作"
+    
+    # 其他异常类型保持原始消息
+    return exc.message
+
+
 async def custom_exception_handler(request: Request, exc: BaseCustomException):
     """自定义异常处理器"""
     request_id = getattr(request.state, "request_id", None)
@@ -189,6 +250,9 @@ async def custom_exception_handler(request: Request, exc: BaseCustomException):
     
     business_code = exception_code_mapping.get(exc.error_code, 1000)
     
+    # 翻译错误信息为中文
+    translated_message = translate_error_message(exc)
+    
     # 记录异常日志
     logger.error(
         f"Custom Exception: {exc.error_code} - {exc.message} - "
@@ -201,7 +265,7 @@ async def custom_exception_handler(request: Request, exc: BaseCustomException):
         status_code=200,
         content={
             "code": business_code,
-            "message": exc.message,
+            "message": translated_message,
             "data": {}
         }
     )

@@ -27,6 +27,8 @@ async def create_role(
     current_user: User = Depends(require_permission("role:create"))
 ):
     """创建新角色"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         role_service = RoleService(db)
         role = await role_service.create_role(role_data)
@@ -41,9 +43,12 @@ async def create_role(
             data=role.to_dict(),
             message="角色创建成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to create role: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="创建角色失败")
 
 
 @router.get("/detail/{role_id}", response_model=RoleResponse, summary="获取角色信息")
@@ -79,6 +84,8 @@ async def update_role(
     current_user: User = Depends(require_permission("role:update"))
 ):
     """更新角色信息"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         role_service = RoleService(db)
         updated_role = await role_service.update_role(role_id, role_data)
@@ -93,9 +100,12 @@ async def update_role(
             data=updated_role.to_dict(),
             message="角色信息更新成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to update role: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="更新角色失败")
 
 
 @router.delete("/delete/{role_id}", summary="删除角色")
