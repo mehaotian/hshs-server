@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -36,6 +36,7 @@ class User(Base):
     cv_recordings = relationship("CVRecording", back_populates="cv_user")
     review_records = relationship("ReviewRecord", back_populates="reviewer")
     created_scripts = relationship("Script", back_populates="creator")
+    profile = relationship("UserProfile", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}', real_name='{self.real_name}')>"
@@ -186,7 +187,7 @@ class UserProfile(Base):
     __table_args__ = {'comment': '用户扩展信息表'}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, unique=True, comment="用户ID")
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True, comment="用户ID")
     cv_experience = Column(Text, nullable=True, comment="配音经验")
     voice_characteristics = Column(Text, nullable=True, comment="声音特点")
     specialties = Column(JSON, nullable=True, comment="专长领域")
@@ -197,6 +198,9 @@ class UserProfile(Base):
     
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # 关系映射
+    user = relationship("User", back_populates="profile")
     
     def __repr__(self) -> str:
         return f"<UserProfile(user_id={self.user_id})>"

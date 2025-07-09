@@ -184,82 +184,77 @@ class ResponseBuilder:
     
     @staticmethod
     def bad_request(
-        message: str = "Bad request",
+        message: str = "参数错误",
         details: Dict[str, Any] = None,
         request_id: str = None
     ) -> JSONResponse:
         """错误请求响应"""
         return ResponseBuilder.error(
-            error_code="BAD_REQUEST",
+            business_code=1001,
             message=message,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details=details,
+            data=details,
             request_id=request_id
         )
     
     @staticmethod
     def unauthorized(
-        message: str = "Unauthorized",
+        message: str = "未登录",
         details: Dict[str, Any] = None,
         request_id: str = None
     ) -> JSONResponse:
         """未授权响应"""
         return ResponseBuilder.error(
-            error_code="UNAUTHORIZED",
+            business_code=2001,
             message=message,
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            details=details,
+            data=details,
             request_id=request_id
         )
     
     @staticmethod
     def forbidden(
-        message: str = "Forbidden",
+        message: str = "权限不足",
         details: Dict[str, Any] = None,
         request_id: str = None
     ) -> JSONResponse:
         """禁止访问响应"""
         return ResponseBuilder.error(
-            error_code="FORBIDDEN",
+            business_code=2003,
             message=message,
-            status_code=status.HTTP_403_FORBIDDEN,
-            details=details,
+            data=details,
             request_id=request_id
         )
     
     @staticmethod
     def not_found(
-        message: str = "Resource not found",
+        message: str = "请求路径不存在",
         details: Dict[str, Any] = None,
         request_id: str = None
     ) -> JSONResponse:
         """资源未找到响应"""
         return ResponseBuilder.error(
-            error_code="NOT_FOUND",
+            business_code=1005,
             message=message,
-            status_code=status.HTTP_404_NOT_FOUND,
-            details=details,
+            data=details,
             request_id=request_id
         )
     
     @staticmethod
     def conflict(
-        message: str = "Resource conflict",
+        message: str = "资源冲突",
         details: Dict[str, Any] = None,
         request_id: str = None
     ) -> JSONResponse:
         """资源冲突响应"""
         return ResponseBuilder.error(
-            error_code="CONFLICT",
+            business_code=1009,
             message=message,
-            status_code=status.HTTP_409_CONFLICT,
-            details=details,
+            data=details,
             request_id=request_id
         )
     
     @staticmethod
     def validation_error(
-        message: str = "参数验证失败",
+        message: str = "数据验证失败",
         validation_errors: List[Dict[str, Any]] = None,
         request_id: str = None
     ) -> JSONResponse:
@@ -268,18 +263,16 @@ class ResponseBuilder:
         if validation_errors:
             data["errors"] = validation_errors
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                "code": 400,
-                "message": message,
-                "data": data
-            }
+        return ResponseBuilder.error(
+            business_code=1002,
+            message=message,
+            data=data,
+            request_id=request_id
         )
     
     @staticmethod
     def rate_limit_exceeded(
-        message: str = "Rate limit exceeded",
+        message: str = "请求过于频繁",
         retry_after: int = None,
         request_id: str = None
     ) -> JSONResponse:
@@ -289,10 +282,9 @@ class ResponseBuilder:
             details["retry_after"] = retry_after
         
         response = ResponseBuilder.error(
-            error_code="RATE_LIMIT_EXCEEDED",
+            business_code=1429,
             message=message,
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            details=details,
+            data=details,
             request_id=request_id
         )
         
@@ -303,20 +295,19 @@ class ResponseBuilder:
     
     @staticmethod
     def internal_error(
-        message: str = "Internal server error",
+        message: str = "服务器内部错误",
         request_id: str = None
     ) -> JSONResponse:
         """内部服务器错误响应"""
         return ResponseBuilder.error(
-            error_code="INTERNAL_ERROR",
+            business_code=1500,
             message=message,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             request_id=request_id
         )
     
     @staticmethod
     def service_unavailable(
-        message: str = "Service unavailable",
+        message: str = "服务暂不可用",
         retry_after: int = None,
         request_id: str = None
     ) -> JSONResponse:
@@ -326,10 +317,9 @@ class ResponseBuilder:
             details["retry_after"] = retry_after
         
         response = ResponseBuilder.error(
-            error_code="SERVICE_UNAVAILABLE",
+            business_code=1503,
             message=message,
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            details=details,
+            data=details,
             request_id=request_id
         )
         
@@ -433,14 +423,13 @@ def success_response(
 
 
 def error_response(
-    error_code: str,
+    business_code: int,
     message: str,
-    status_code: int = status.HTTP_400_BAD_REQUEST,
-    details: Dict[str, Any] = None,
+    data: Dict[str, Any] = None,
     request_id: str = None
 ) -> JSONResponse:
     """错误响应快捷函数"""
-    return ResponseBuilder.error(error_code, message, status_code, details, request_id)
+    return ResponseBuilder.error(business_code, message, data, request_id)
 
 
 def paginated_response(

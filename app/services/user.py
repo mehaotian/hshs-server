@@ -205,11 +205,11 @@ class UserService:
                 query = query.where(and_(*conditions))
         
         # 排序
-        if search_query and search_query.sort_by:
-            if search_query.sort_order == "desc":
-                query = query.order_by(getattr(User, search_query.sort_by).desc())
+        if search_query and search_query.order_by:
+            if search_query.order_desc:
+                query = query.order_by(getattr(User, search_query.order_by).desc())
             else:
-                query = query.order_by(getattr(User, search_query.sort_by))
+                query = query.order_by(getattr(User, search_query.order_by))
         else:
             query = query.order_by(User.created_at.desc())
         
@@ -247,7 +247,22 @@ class UserService:
         result = await self.db.execute(query)
         users = result.scalars().all()
         
-        return list(users), total
+        # 转换为UserListResponse格式的字典
+        user_list = []
+        for user in users:
+            user_dict = {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "real_name": user.real_name,
+                "status": user.status,
+                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "roles": []  # TODO: 需要加载用户角色
+            }
+            user_list.append(user_dict)
+        
+        return user_list, total
     
     async def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """认证用户"""

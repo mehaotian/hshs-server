@@ -275,18 +275,18 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     """HTTP异常处理器"""
     request_id = getattr(request.state, "request_id", None)
     
-    # 映射HTTP状态码到业务状态码
+    # 映射HTTP状态码到业务状态码和中文错误消息
     status_code_mapping = {
-        401: 2001,  # 未登录
-        403: 2003,  # 权限不足
-        404: 1005,  # 请求路径不存在
-        405: 1004,  # 请求方法不支持
-        429: 1006,  # 请求频率过高
-        500: 1000,  # 系统内部错误
-        503: 1007,  # 服务暂不可用
+        401: (2001, "未登录"),  # 未登录
+        403: (2003, "权限不足"),  # 权限不足
+        404: (1005, "请求路径不存在"),  # 请求路径不存在
+        405: (1004, "请求方法不支持"),  # 请求方法不支持
+        429: (1006, "请求频率过高"),  # 请求频率过高
+        500: (1000, "系统内部错误"),  # 系统内部错误
+        503: (1007, "服务暂不可用"),  # 服务暂不可用
     }
     
-    business_code = status_code_mapping.get(exc.status_code, 1000)
+    business_code, chinese_message = status_code_mapping.get(exc.status_code, (1000, "系统内部错误"))
     
     # 记录异常日志
     logger.warning(
@@ -300,7 +300,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         status_code=200,
         content={
             "code": business_code,
-            "message": str(exc.detail),
+            "message": chinese_message,
             "data": {}
         }
     )

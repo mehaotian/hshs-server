@@ -208,11 +208,10 @@ async def get_users(
         search_query = UserSearchQuery(
             keyword=keyword,
             status=status,
-            role_id=role_id,
             created_after=created_after,
             created_before=created_before,
-            sort_by=sort_by,
-            sort_order=sort_order
+            order_by=sort_by or "created_at",
+            order_desc=sort_order == "desc"
         )
         
         user_service = UserService(db)
