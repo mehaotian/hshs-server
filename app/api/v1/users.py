@@ -33,6 +33,8 @@ async def create_user(
     current_user: User = Depends(require_permission("user:create"))
 ):
     """创建新用户"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         user_service = UserService(db)
         user = await user_service.create_user(user_data)
@@ -47,9 +49,12 @@ async def create_user(
             data=user.to_dict_sync(),
             message="用户创建成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to create user: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="创建用户失败")
 
 
 @router.get("/profile", response_model=UserResponse, summary="获取当前用户信息")
@@ -70,6 +75,8 @@ async def update_current_user(
     current_user: User = Depends(get_current_active_user)
 ):
     """更新当前登录用户的信息"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         user_service = UserService(db)
         updated_user = await user_service.update_user(current_user.id, user_data)
@@ -84,9 +91,12 @@ async def update_current_user(
             data=updated_user.to_dict_sync(),
             message="用户信息更新成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to update user: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="更新用户信息失败")
 
 
 @router.put("/change-password", summary="修改当前用户密码")
@@ -96,6 +106,8 @@ async def change_password(
     current_user: User = Depends(get_current_active_user)
 ):
     """修改当前登录用户的密码"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         user_service = UserService(db)
         await user_service.update_password(current_user.id, password_data)
@@ -109,9 +121,12 @@ async def change_password(
         return ResponseBuilder.success(
             message="密码修改成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to change password: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="修改密码失败")
 
 
 @router.get("/detail/{user_id}", response_model=UserResponse, summary="获取用户信息")
@@ -147,6 +162,8 @@ async def update_user(
     current_user: User = Depends(require_permission("user:update"))
 ):
     """更新指定用户的信息"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         user_service = UserService(db)
         updated_user = await user_service.update_user(user_id, user_data)
@@ -161,9 +178,12 @@ async def update_user(
             data=updated_user.to_dict_sync(),
             message="用户信息更新成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to update user: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="更新用户信息失败")
 
 
 @router.delete("/delete/{user_id}", summary="删除用户")
@@ -286,6 +306,8 @@ async def create_user_profile(
     current_user: User = Depends(get_current_active_user)
 ):
     """为当前用户创建档案"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         user_service = UserService(db)
         profile = await user_service.create_user_profile(current_user.id, profile_data)
@@ -294,9 +316,12 @@ async def create_user_profile(
             data=profile.to_dict(),
             message="用户档案创建成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to create user profile: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="创建用户档案失败")
 
 
 @router.get("/me/profile", response_model=UserProfileResponse, summary="获取用户档案")
@@ -330,6 +355,8 @@ async def update_user_profile(
     current_user: User = Depends(get_current_active_user)
 ):
     """更新当前用户的档案"""
+    from app.core.exceptions import BaseCustomException
+    
     try:
         user_service = UserService(db)
         updated_profile = await user_service.update_user_profile(current_user.id, profile_data)
@@ -338,9 +365,12 @@ async def update_user_profile(
             data=updated_profile.to_dict(),
             message="用户档案更新成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器
+        raise
     except Exception as e:
         logger.error(f"Failed to update user profile: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail="更新用户档案失败")
 
 
 @router.get("/{user_id}/profile", response_model=UserProfileResponse, summary="获取指定用户档案")
