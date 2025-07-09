@@ -72,6 +72,21 @@ class Role(Base):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+    
+    @classmethod
+    def get_system_roles(cls) -> List[Dict[str, Any]]:
+        """获取系统角色定义"""
+        roles = []
+        for name, config in SYSTEM_ROLES.items():
+            roles.append({
+                'name': name,
+                'display_name': config['display_name'],
+                'description': config['description'],
+                'permissions': config['permissions'],
+                'is_system': 1,
+                'sort_order': len(roles)
+            })
+        return roles
 
 
 class UserRole(Base):
@@ -159,6 +174,28 @@ class Permission(Base):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+    
+    @classmethod
+    def get_system_permissions(cls) -> List[Dict[str, Any]]:
+        """获取系统权限定义"""
+        permissions = []
+        for name, display_name in SYSTEM_PERMISSIONS.items():
+            # 解析权限名称获取模块和操作
+            parts = name.split(':')
+            module = parts[0] if len(parts) > 0 else None
+            action = parts[1] if len(parts) > 1 else None
+            
+            permissions.append({
+                'name': name,
+                'display_name': display_name,
+                'description': display_name,
+                'module': module,
+                'action': action,
+                'resource': module,
+                'is_system': 1,
+                'sort_order': len(permissions)
+            })
+        return permissions
 
 
 # 预定义的系统权限

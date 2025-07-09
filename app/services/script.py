@@ -25,7 +25,7 @@ class ScriptService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.db_manager = DatabaseManager(db)
+        self.db_manager = DatabaseManager()
     
     # ==================== 剧社管理 ====================
     

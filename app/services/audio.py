@@ -30,7 +30,7 @@ class AudioService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.db_manager = DatabaseManager(db)
+        self.db_manager = DatabaseManager()
         self.upload_dir = Path(settings.UPLOAD_DIR) / "audio"
         self.upload_dir.mkdir(parents=True, exist_ok=True)
     

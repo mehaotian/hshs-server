@@ -128,11 +128,21 @@ class AuthManager:
         token = credentials.credentials
         payload = AuthManager.verify_token(token)
         
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # 将字符串类型的用户ID转换为整数
+        try:
+            user_id: int = int(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user ID in token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
