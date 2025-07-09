@@ -260,8 +260,8 @@ ON CONFLICT (name) DO NOTHING;
 
 -- 创建默认管理员用户（密码：admin123，请在生产环境中修改）
 -- 注意：这里的密码哈希是 bcrypt 加密的 "admin123"
-INSERT INTO users (username, email, password_hash, nickname, is_superuser, status) VALUES
-('admin', 'admin@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.F5e', '系统管理员', true, 'active')
+INSERT INTO users (username, email, password_hash, real_name, status, created_at, updated_at) VALUES
+('admin', 'admin@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3bp.Gm.F5e', '系统管理员', 1, NOW(), NOW())
 ON CONFLICT (username) DO NOTHING;
 
 -- 为默认管理员分配超级管理员角色

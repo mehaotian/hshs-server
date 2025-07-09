@@ -62,9 +62,9 @@ async def register(
         
         result = await db.execute(
             text("""
-                INSERT INTO users (username, email, password_hash, real_name, status)
-                VALUES (:username, :email, :password_hash, :real_name, :status)
-                RETURNING id, username, email, real_name, created_at
+                INSERT INTO users (username, email, password_hash, real_name, status, created_at, updated_at)
+                VALUES (:username, :email, :password_hash, :real_name, :status, NOW(), NOW())
+                RETURNING id, username, email, real_name, created_at, updated_at
             """),
             {
                 "username": username,
@@ -91,7 +91,8 @@ async def register(
                 "username": user_data.username,
                 "email": user_data.email,
                 "real_name": user_data.real_name,
-                "created_at": user_data.created_at.isoformat() if user_data.created_at else None
+                "created_at": user_data.created_at.isoformat() if user_data.created_at else None,
+                "updated_at": user_data.updated_at.isoformat() if user_data.updated_at else None
             },
             message="用户注册成功"
         )
@@ -553,9 +554,9 @@ async def simple_register(
         
         result = await db.execute(
             text("""
-                INSERT INTO users (username, email, password_hash, real_name, status)
-                VALUES (:username, :email, :password_hash, :real_name, :status)
-                RETURNING id, username, email, real_name, created_at
+                INSERT INTO users (username, email, password_hash, real_name, status, created_at, updated_at)
+                VALUES (:username, :email, :password_hash, :real_name, :status, NOW(), NOW())
+                RETURNING id, username, email, real_name, created_at, updated_at
             """),
             {
                 "username": username,
@@ -565,17 +566,18 @@ async def simple_register(
                 "status": 1
             }
         )
-        
+
         user_data = result.fetchone()
         await db.commit()
-        
+
         return ResponseBuilder.created(
             data={
                 "id": user_data.id,
                 "username": user_data.username,
                 "email": user_data.email,
                 "real_name": user_data.real_name,
-                "created_at": user_data.created_at.isoformat() if user_data.created_at else None
+                "created_at": user_data.created_at.isoformat() if user_data.created_at else None,
+                "updated_at": user_data.updated_at.isoformat() if user_data.updated_at else None
             },
             message="用户注册成功"
         )
