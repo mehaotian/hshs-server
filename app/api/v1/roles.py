@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.auth import get_current_user, require_permission
 from app.core.response import ResponseBuilder
-from app.core.logger import logger
+from app.core.logger import logger, log_security_event
 from app.models.user import User
 from app.schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
@@ -31,14 +31,26 @@ async def create_role(
         role_service = RoleService(db)
         role = await role_service.create_role(role_data)
 
-        logger.log_security_event(
+        log_security_event(
             "role_created",
             user_id=current_user.id,
             details={"role_name": role.name, "role_id": role.id}
         )
 
+        # 转换为字典格式以避免JSON序列化错误
+        role_data = {
+            "id": role.id,
+            "name": role.name,
+            "display_name": role.display_name,
+            "description": role.description,
+            "is_system": role.is_system,
+            "sort_order": role.sort_order,
+            "created_at": role.created_at.isoformat() if role.created_at else None,
+            "updated_at": role.updated_at.isoformat() if role.updated_at else None
+        }
+        
         return ResponseBuilder.success(
-            data=role,
+            data=role_data,
             message="角色创建成功"
         )
     except Exception as e:
@@ -83,7 +95,7 @@ async def update_role(
         role_service = RoleService(db)
         updated_role = await role_service.update_role(role_id, role_data)
 
-        logger.log_security_event(
+        log_security_event(
             "role_updated",
             user_id=current_user.id,
             details={
@@ -112,7 +124,7 @@ async def delete_role(
         role_service = RoleService(db)
         await role_service.delete_role(role_id)
 
-        logger.log_security_event(
+        log_security_event(
             "role_deleted",
             user_id=current_user.id,
             details={"role_id": role_id}
