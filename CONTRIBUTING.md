@@ -105,7 +105,7 @@ git commit -m "feat: 添加用户头像上传功能"
 
 提交信息格式：
 
-```
+```base
 <type>[optional scope]: <description>
 
 [optional body]
