@@ -20,7 +20,7 @@ router = APIRouter()
 
 # ==================== 角色管理 ====================
 
-@router.post("/", response_model=RoleResponse, summary="创建角色")
+@router.post("/add", response_model=RoleResponse, summary="创建角色")
 async def create_role(
     role_data: RoleCreate,
     db: AsyncSession = Depends(get_db),
@@ -46,7 +46,7 @@ async def create_role(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{role_id}", response_model=RoleResponse, summary="获取角色信息")
+@router.get("/detail/{role_id}", response_model=RoleResponse, summary="获取角色信息")
 async def get_role(
     role_id: int,
     db: AsyncSession = Depends(get_db),
@@ -71,7 +71,7 @@ async def get_role(
         raise HTTPException(status_code=500, detail="获取角色信息失败")
 
 
-@router.put("/{role_id}", response_model=RoleResponse, summary="更新角色信息")
+@router.put("/update/{role_id}", response_model=RoleResponse, summary="更新角色信息")
 async def update_role(
     role_id: int,
     role_data: RoleUpdate,
@@ -101,7 +101,7 @@ async def update_role(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{role_id}", summary="删除角色")
+@router.delete("/delete/{role_id}", summary="删除角色")
 async def delete_role(
     role_id: int,
     db: AsyncSession = Depends(get_db),
@@ -126,7 +126,7 @@ async def delete_role(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", response_model=RoleListResponse, summary="获取角色列表")
+@router.get("/list", response_model=RoleListResponse, summary="获取角色列表")
 async def get_roles(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -162,7 +162,7 @@ async def get_roles(
         raise HTTPException(status_code=500, detail="获取角色列表失败")
 
 
-@router.get("/statistics/overview", response_model=RoleStatistics, summary="获取角色统计信息")
+@router.get("/stat/overview", response_model=RoleStatistics, summary="获取角色统计信息")
 async def get_role_statistics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:read"))
@@ -183,7 +183,7 @@ async def get_role_statistics(
 
 # ==================== 权限管理 ====================
 
-@router.post("/permissions", response_model=PermissionResponse, summary="创建权限")
+@router.post("/permissions/add", response_model=PermissionResponse, summary="创建权限")
 async def create_permission(
     permission_data: PermissionCreate,
     db: AsyncSession = Depends(get_db),
@@ -209,7 +209,7 @@ async def create_permission(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/permissions/{permission_id}", response_model=PermissionResponse, summary="获取权限信息")
+@router.get("/permissions/detail/{permission_id}", response_model=PermissionResponse, summary="获取权限信息")
 async def get_permission(
     permission_id: int,
     db: AsyncSession = Depends(get_db),
@@ -234,7 +234,7 @@ async def get_permission(
         raise HTTPException(status_code=500, detail="获取权限信息失败")
 
 
-@router.put("/permissions/{permission_id}", response_model=PermissionResponse, summary="更新权限信息")
+@router.put("/permissions/update/{permission_id}", response_model=PermissionResponse, summary="更新权限信息")
 async def update_permission(
     permission_id: int,
     permission_data: PermissionUpdate,
@@ -264,7 +264,7 @@ async def update_permission(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/permissions/{permission_id}", summary="删除权限")
+@router.delete("/permissions/delete/{permission_id}", summary="删除权限")
 async def delete_permission(
     permission_id: int,
     db: AsyncSession = Depends(get_db),
@@ -289,7 +289,7 @@ async def delete_permission(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/permissions", response_model=PermissionListResponse, summary="获取权限列表")
+@router.get("/permissions/list", response_model=PermissionListResponse, summary="获取权限列表")
 async def get_permissions(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -327,7 +327,7 @@ async def get_permissions(
 
 # ==================== 用户角色分配 ====================
 
-@router.post("/assign", summary="分配角色给用户")
+@router.post("/user/assign", summary="分配角色给用户")
 async def assign_role_to_user(
     assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
@@ -353,7 +353,7 @@ async def assign_role_to_user(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/unassign", summary="移除用户角色")
+@router.delete("/user/unassign", summary="移除用户角色")
 async def remove_role_from_user(
     assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
@@ -379,7 +379,7 @@ async def remove_role_from_user(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/batch-assign", summary="批量分配角色")
+@router.post("/user/batch-assign", summary="批量分配角色")
 async def batch_assign_roles(
     operation: UserRoleBatchOperation,
     db: AsyncSession = Depends(get_db),
@@ -411,7 +411,7 @@ async def batch_assign_roles(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/users/{user_id}/roles", summary="获取用户角色")
+@router.get("/user/{user_id}/roles", summary="获取用户角色")
 async def get_user_roles(
     user_id: int,
     db: AsyncSession = Depends(get_db),
@@ -431,7 +431,7 @@ async def get_user_roles(
         raise HTTPException(status_code=500, detail="获取用户角色失败")
 
 
-@router.get("/{role_id}/users", summary="获取拥有角色的用户")
+@router.get("/users/{role_id}", summary="获取拥有角色的用户")
 async def get_role_users(
     role_id: int,
     page: int = Query(1, ge=1, description="页码"),
@@ -458,7 +458,7 @@ async def get_role_users(
 
 # ==================== 权限检查 ====================
 
-@router.get("/users/{user_id}/permissions", summary="获取用户权限")
+@router.get("/user/{user_id}/permissions", summary="获取用户权限")
 async def get_user_permissions(
     user_id: int,
     db: AsyncSession = Depends(get_db),
@@ -478,7 +478,7 @@ async def get_user_permissions(
         raise HTTPException(status_code=500, detail="获取用户权限失败")
 
 
-@router.post("/check-permission", summary="检查用户权限")
+@router.post("/permission/check", summary="检查用户权限")
 async def check_user_permission(
     user_id: int = Query(..., description="用户ID"),
     permission: str = Query(..., description="权限名称"),
@@ -501,7 +501,7 @@ async def check_user_permission(
 
 # ==================== 系统初始化 ====================
 
-@router.post("/init", summary="初始化系统角色和权限")
+@router.post("/system/init", summary="初始化系统角色和权限")
 async def init_system_roles(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("system:init"))
