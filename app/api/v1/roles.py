@@ -30,13 +30,13 @@ async def create_role(
     try:
         role_service = RoleService(db)
         role = await role_service.create_role(role_data)
-        
+
         logger.log_security_event(
             "role_created",
             user_id=current_user.id,
             details={"role_name": role.name, "role_id": role.id}
         )
-        
+
         return ResponseBuilder.success(
             data=role,
             message="角色创建成功"
@@ -56,10 +56,10 @@ async def get_role(
     try:
         role_service = RoleService(db)
         role = await role_service.get_role_by_id(role_id)
-        
+
         if not role:
             raise HTTPException(status_code=404, detail="角色不存在")
-        
+
         return ResponseBuilder.success(
             data=role,
             message="获取角色信息成功"
@@ -82,7 +82,7 @@ async def update_role(
     try:
         role_service = RoleService(db)
         updated_role = await role_service.update_role(role_id, role_data)
-        
+
         logger.log_security_event(
             "role_updated",
             user_id=current_user.id,
@@ -91,7 +91,7 @@ async def update_role(
                 "updated_fields": list(role_data.dict(exclude_unset=True).keys())
             }
         )
-        
+
         return ResponseBuilder.success(
             data=updated_role,
             message="角色信息更新成功"
@@ -111,13 +111,13 @@ async def delete_role(
     try:
         role_service = RoleService(db)
         await role_service.delete_role(role_id)
-        
+
         logger.log_security_event(
             "role_deleted",
             user_id=current_user.id,
             details={"role_id": role_id}
         )
-        
+
         return ResponseBuilder.success(
             message="角色删除成功"
         )
@@ -126,14 +126,16 @@ async def delete_role(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/list", response_model=RoleListResponse, summary="获取角色列表")
+@router.get("/list", summary="获取角色列表")
 async def get_roles(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: Optional[str] = Query(None, description="搜索关键词"),
-    is_active: Optional[bool] = Query(None, description="是否激活"),
-    sort_by: Optional[str] = Query("created_at", description="排序字段"),
-    sort_order: Optional[str] = Query("desc", description="排序方向"),
+    is_system: Optional[bool] = Query(None, description="是否系统角色"),
+    has_users: Optional[bool] = Query(None, description="是否有用户"),
+    permission: Optional[str] = Query(None, description="包含特定权限"),
+    order_by: str = Query("sort_order", description="排序字段"),
+    order_desc: bool = Query(False, description="是否降序"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:read"))
 ):
@@ -142,16 +144,62 @@ async def get_roles(
         # 构建搜索查询
         search_query = RoleSearchQuery(
             keyword=keyword,
-            is_active=is_active,
-            sort_by=sort_by,
-            sort_order=sort_order
+            is_system=is_system,
+            has_users=has_users,
+            permission=permission,
+            page=page,
+            page_size=size,
+            order_by=order_by,
+            order_desc=order_desc
         )
-        
+
         role_service = RoleService(db)
         roles, total = await role_service.get_roles(page, size, search_query)
         
+        # 批量获取用户数量统计，避免N+1查询问题
+        role_ids = [role.id for role in roles]
+        user_counts = {}
+        
+        if role_ids:
+            from sqlalchemy import select, func
+            from app.models.role import UserRole
+            
+            # 批量查询每个角色的用户数量
+            user_count_query = (
+                select(UserRole.role_id, func.count(UserRole.user_id).label('user_count'))
+                .where(UserRole.role_id.in_(role_ids))
+                .group_by(UserRole.role_id)
+            )
+            user_count_result = await db.execute(user_count_query)
+            user_counts = {row.role_id: row.user_count for row in user_count_result}
+        
+        # 转换为响应模型
+        role_list = []
+        for role in roles:
+            # 从批量查询结果中获取用户数量
+            user_count = user_counts.get(role.id, 0)
+            # 修复权限计数逻辑 - role.permissions是JSON列
+            permission_count = 0
+            if hasattr(role, 'permissions') and role.permissions:
+                if isinstance(role.permissions, dict) and 'permissions' in role.permissions:
+                    permission_count = len(role.permissions['permissions'])
+                elif isinstance(role.permissions, list):
+                    permission_count = len(role.permissions)
+            
+            role_data = {
+                "id": role.id,
+                "name": role.name,
+                "display_name": role.display_name,
+                "description": role.description,
+                "is_system": role.is_system,
+                "user_count": user_count,
+                "permission_count": permission_count,
+                "created_at": role.created_at.isoformat() if role.created_at else None
+            }
+            role_list.append(role_data)
+        
         return ResponseBuilder.paginated(
-            data=roles,
+            data=role_list,
             total=total,
             page=page,
             size=size,
@@ -171,7 +219,7 @@ async def get_role_statistics(
     try:
         role_service = RoleService(db)
         statistics = await role_service.get_role_statistics()
-        
+
         return ResponseBuilder.success(
             data=statistics,
             message="获取角色统计信息成功"
@@ -193,13 +241,14 @@ async def create_permission(
     try:
         role_service = RoleService(db)
         permission = await role_service.create_permission(permission_data)
-        
+
         logger.log_security_event(
             "permission_created",
             user_id=current_user.id,
-            details={"permission_name": permission.name, "permission_id": permission.id}
+            details={"permission_name": permission.name,
+                     "permission_id": permission.id}
         )
-        
+
         return ResponseBuilder.success(
             data=permission,
             message="权限创建成功"
@@ -219,10 +268,10 @@ async def get_permission(
     try:
         role_service = RoleService(db)
         permission = await role_service.get_permission_by_id(permission_id)
-        
+
         if not permission:
             raise HTTPException(status_code=404, detail="权限不存在")
-        
+
         return ResponseBuilder.success(
             data=permission,
             message="获取权限信息成功"
@@ -245,7 +294,7 @@ async def update_permission(
     try:
         role_service = RoleService(db)
         updated_permission = await role_service.update_permission(permission_id, permission_data)
-        
+
         logger.log_security_event(
             "permission_updated",
             user_id=current_user.id,
@@ -254,7 +303,7 @@ async def update_permission(
                 "updated_fields": list(permission_data.dict(exclude_unset=True).keys())
             }
         )
-        
+
         return ResponseBuilder.success(
             data=updated_permission,
             message="权限信息更新成功"
@@ -274,13 +323,13 @@ async def delete_permission(
     try:
         role_service = RoleService(db)
         await role_service.delete_permission(permission_id)
-        
+
         logger.log_security_event(
             "permission_deleted",
             user_id=current_user.id,
             details={"permission_id": permission_id}
         )
-        
+
         return ResponseBuilder.success(
             message="权限删除成功"
         )
@@ -309,10 +358,10 @@ async def get_permissions(
             sort_by=sort_by,
             sort_order=sort_order
         )
-        
+
         role_service = RoleService(db)
         permissions, total = await role_service.get_permissions(page, size, search_query)
-        
+
         return ResponseBuilder.paginated(
             data=permissions,
             total=total,
@@ -337,14 +386,14 @@ async def assign_role_to_user(
     try:
         role_service = RoleService(db)
         await role_service.assign_role_to_user(assignment.user_id, assignment.role_id)
-        
+
         logger.log_security_event(
             "role_assigned",
             user_id=current_user.id,
             target_user_id=assignment.user_id,
             details={"role_id": assignment.role_id}
         )
-        
+
         return ResponseBuilder.success(
             message="角色分配成功"
         )
@@ -363,14 +412,14 @@ async def remove_role_from_user(
     try:
         role_service = RoleService(db)
         await role_service.remove_role_from_user(assignment.user_id, assignment.role_id)
-        
+
         logger.log_security_event(
             "role_removed",
             user_id=current_user.id,
             target_user_id=assignment.user_id,
             details={"role_id": assignment.role_id}
         )
-        
+
         return ResponseBuilder.success(
             message="角色移除成功"
         )
@@ -389,7 +438,7 @@ async def batch_assign_roles(
     try:
         role_service = RoleService(db)
         result = await role_service.batch_assign_roles(operation)
-        
+
         logger.log_security_event(
             "role_batch_operation",
             user_id=current_user.id,
@@ -401,7 +450,7 @@ async def batch_assign_roles(
                 "failed_count": result["failed_count"]
             }
         )
-        
+
         return ResponseBuilder.success(
             data=result,
             message=f"批量操作完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
@@ -421,7 +470,7 @@ async def get_user_roles(
     try:
         role_service = RoleService(db)
         roles = await role_service.get_user_roles(user_id)
-        
+
         return ResponseBuilder.success(
             data=roles,
             message="获取用户角色成功"
@@ -443,7 +492,7 @@ async def get_role_users(
     try:
         role_service = RoleService(db)
         users, total = await role_service.get_role_users(role_id, page, size)
-        
+
         return ResponseBuilder.paginated(
             data=users,
             total=total,
@@ -468,7 +517,7 @@ async def get_user_permissions(
     try:
         role_service = RoleService(db)
         permissions = await role_service.get_user_permissions(user_id)
-        
+
         return ResponseBuilder.success(
             data=permissions,
             message="获取用户权限成功"
@@ -489,7 +538,7 @@ async def check_user_permission(
     try:
         role_service = RoleService(db)
         has_permission = await role_service.check_user_permission(user_id, permission)
-        
+
         return ResponseBuilder.success(
             data={"has_permission": has_permission},
             message="权限检查完成"
@@ -510,13 +559,13 @@ async def init_system_roles(
     try:
         role_service = RoleService(db)
         result = await role_service.init_system_roles()
-        
+
         logger.log_security_event(
             "system_roles_initialized",
             user_id=current_user.id,
             details=result
         )
-        
+
         return ResponseBuilder.success(
             data=result,
             message="系统角色和权限初始化成功"

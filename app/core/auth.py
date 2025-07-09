@@ -115,7 +115,7 @@ class AuthManager:
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
+                detail="登录已过期",
                 headers={"WWW-Authenticate": "Bearer"},
             )
     
@@ -132,7 +132,7 @@ class AuthManager:
         if user_id_str is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
+                detail="登录已过期",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -233,7 +233,7 @@ class AuthManager:
             if not has_permission:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not enough permissions"
+                    detail="权限不足"
                 )
             
             return current_user

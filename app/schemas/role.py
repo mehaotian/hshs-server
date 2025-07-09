@@ -28,12 +28,13 @@ class PermissionBase(BaseModel):
     """权限基础模型"""
     name: str = Field(..., max_length=100, description="权限名称")
     display_name: str = Field(..., max_length=100, description="显示名称")
-    description: Optional[str] = Field(None, max_length=500, description="权限描述")
+    description: Optional[str] = Field(
+        None, max_length=500, description="权限描述")
     module: str = Field(..., max_length=50, description="所属模块")
     action: PermissionType = Field(..., description="操作类型")
     resource: ResourceType = Field(..., description="资源类型")
     sort_order: int = Field(0, description="排序顺序")
-    
+
     @validator('name')
     def validate_name(cls, v):
         if not v.replace('_', '').replace(':', '').isalnum():
@@ -48,8 +49,10 @@ class PermissionCreate(PermissionBase):
 
 class PermissionUpdate(BaseModel):
     """更新权限模型"""
-    display_name: Optional[str] = Field(None, max_length=100, description="显示名称")
-    description: Optional[str] = Field(None, max_length=500, description="权限描述")
+    display_name: Optional[str] = Field(
+        None, max_length=100, description="显示名称")
+    description: Optional[str] = Field(
+        None, max_length=500, description="权限描述")
     sort_order: Optional[int] = Field(None, description="排序顺序")
 
 
@@ -59,7 +62,7 @@ class PermissionResponse(PermissionBase):
     is_system: bool
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
         json_encoders = {
@@ -83,9 +86,10 @@ class RoleBase(BaseModel):
     """角色基础模型"""
     name: str = Field(..., max_length=50, description="角色名称")
     display_name: str = Field(..., max_length=100, description="显示名称")
-    description: Optional[str] = Field(None, max_length=500, description="角色描述")
+    description: Optional[str] = Field(
+        None, max_length=500, description="角色描述")
     sort_order: int = Field(0, description="排序顺序")
-    
+
     @validator('name')
     def validate_name(cls, v):
         if not v.replace('_', '').isalnum():
@@ -100,8 +104,10 @@ class RoleCreate(RoleBase):
 
 class RoleUpdate(BaseModel):
     """更新角色模型"""
-    display_name: Optional[str] = Field(None, max_length=100, description="显示名称")
-    description: Optional[str] = Field(None, max_length=500, description="角色描述")
+    display_name: Optional[str] = Field(
+        None, max_length=100, description="显示名称")
+    description: Optional[str] = Field(
+        None, max_length=500, description="角色描述")
     sort_order: Optional[int] = Field(None, description="排序顺序")
     permissions: Optional[List[str]] = Field(None, description="权限列表")
 
@@ -110,11 +116,12 @@ class RoleResponse(RoleBase):
     """角色响应模型"""
     id: int
     is_system: bool
-    permissions: List[PermissionResponse] = Field(default_factory=list, description="权限列表")
+    permissions: List[PermissionResponse] = Field(
+        default_factory=list, description="权限列表")
     user_count: int = Field(0, description="用户数量")
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
         json_encoders = {
@@ -132,7 +139,7 @@ class RoleListResponse(BaseModel):
     user_count: int
     permission_count: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
         json_encoders = {
@@ -145,7 +152,7 @@ class UserRoleBase(BaseModel):
     user_id: int = Field(..., description="用户ID")
     role_id: int = Field(..., description="角色ID")
     expires_at: Optional[datetime] = Field(None, description="过期时间")
-    
+
     @validator('expires_at')
     def validate_expires_at(cls, v):
         if v and v <= datetime.utcnow():
@@ -161,7 +168,7 @@ class UserRoleCreate(UserRoleBase):
 class UserRoleUpdate(BaseModel):
     """更新用户角色模型"""
     expires_at: Optional[datetime] = Field(None, description="过期时间")
-    
+
     @validator('expires_at')
     def validate_expires_at(cls, v):
         if v and v <= datetime.utcnow():
@@ -176,7 +183,7 @@ class UserRoleResponse(UserRoleBase):
     assigned_at: datetime
     is_expired: bool
     role: RoleResponse
-    
+
     class Config:
         from_attributes = True
         json_encoders = {
@@ -189,7 +196,7 @@ class RoleAssignmentBatch(BaseModel):
     user_ids: List[int] = Field(..., min_items=1, description="用户ID列表")
     role_ids: List[int] = Field(..., min_items=1, description="角色ID列表")
     expires_at: Optional[datetime] = Field(None, description="过期时间")
-    
+
     @validator('expires_at')
     def validate_expires_at(cls, v):
         if v and v <= datetime.utcnow():
@@ -227,8 +234,9 @@ class RolePermissionMatrix(BaseModel):
     role_id: int
     role_name: str
     role_display_name: str
-    permissions: Dict[str, Dict[str, bool]]  # {module: {permission: has_permission}}
-    
+    # {module: {permission: has_permission}}
+    permissions: Dict[str, Dict[str, bool]]
+
     class Config:
         from_attributes = True
 
@@ -244,7 +252,8 @@ class PermissionCheckResult(BaseModel):
     """权限检查结果模型"""
     has_permission: bool
     reason: Optional[str] = None
-    granted_by_roles: List[str] = Field(default_factory=list, description="授权角色列表")
+    granted_by_roles: List[str] = Field(
+        default_factory=list, description="授权角色列表")
 
 
 class RoleStatistics(BaseModel):
@@ -256,7 +265,7 @@ class RoleStatistics(BaseModel):
     active_permissions: int
     inactive_permissions: int
     total_users_with_roles: int
-    
+
     class Config:
         from_attributes = True
 
@@ -265,7 +274,7 @@ class UserRoleAssignment(BaseModel):
     """用户角色分配模型"""
     user_id: int
     role_id: int
-    
+
     class Config:
         from_attributes = True
 
@@ -275,31 +284,7 @@ class UserRoleBatchOperation(BaseModel):
     user_ids: List[int]
     role_ids: List[int]
     operation: str  # "assign" or "remove"
-    
-    class Config:
-        from_attributes = True
 
-
-class RoleSearchQuery(BaseModel):
-    """角色搜索查询模型"""
-    keyword: Optional[str] = None
-    is_active: Optional[bool] = None
-    sort_by: Optional[str] = "created_at"
-    sort_order: Optional[str] = "desc"
-    
-    class Config:
-        from_attributes = True
-
-
-class PermissionSearchQuery(BaseModel):
-    """权限搜索查询模型"""
-    keyword: Optional[str] = None
-    resource: Optional[str] = None
-    action: Optional[str] = None
-    is_active: Optional[bool] = None
-    sort_by: Optional[str] = "created_at"
-    sort_order: Optional[str] = "desc"
-    
     class Config:
         from_attributes = True
 
@@ -311,7 +296,7 @@ class RoleTemplate(BaseModel):
     description: str = Field(..., description="模板描述")
     permissions: List[str] = Field(..., description="权限列表")
     is_builtin: bool = Field(True, description="是否内置模板")
-    
+
     class Config:
         from_attributes = True
 
@@ -321,6 +306,6 @@ class RoleImportExport(BaseModel):
     roles: List[Dict[str, Any]] = Field(..., description="角色数据")
     permissions: List[Dict[str, Any]] = Field(..., description="权限数据")
     role_permissions: List[Dict[str, Any]] = Field(..., description="角色权限关联数据")
-    
+
     class Config:
         from_attributes = True

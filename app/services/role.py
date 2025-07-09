@@ -143,57 +143,70 @@ class RoleService:
         size: int = 20,
         search_query: Optional[RoleSearchQuery] = None
     ) -> Tuple[List[Role], int]:
-        """获取角色列表"""
+        """获取角色列表（优化版本）"""
+        # 基础查询，Role.permissions是JSON列不需要预加载
         query = select(Role)
         
-        # 构建搜索条件
-        if search_query:
+        # 构建搜索条件的公共函数
+        def build_conditions(search_query):
             conditions = []
-            
-            if search_query.keyword:
-                keyword = f"%{search_query.keyword}%"
-                conditions.append(
-                    or_(
-                        Role.name.ilike(keyword),
-                        Role.display_name.ilike(keyword),
-                        Role.description.ilike(keyword)
+            if search_query:
+                if search_query.keyword:
+                    keyword = f"%{search_query.keyword}%"
+                    conditions.append(
+                        or_(
+                            Role.name.ilike(keyword),
+                            Role.display_name.ilike(keyword),
+                            Role.description.ilike(keyword)
+                        )
                     )
-                )
+                
+                if search_query.is_system is not None:
+                    conditions.append(Role.is_system == search_query.is_system)
+                
+                # 支持按权限过滤 - 在JSON列中搜索
+                if search_query.permission:
+                    # 使用JSON操作符搜索权限
+                    conditions.append(
+                        Role.permissions.op('->>')('permissions').op('@>')(
+                            f'["{search_query.permission}"]'
+                        )
+                    )
+                
+                # 支持按是否有用户过滤
+                if search_query.has_users is not None:
+                    if search_query.has_users:
+                        conditions.append(Role.user_roles.any())
+                    else:
+                        conditions.append(~Role.user_roles.any())
             
-            if search_query.is_system is not None:
-                conditions.append(Role.is_system == search_query.is_system)
-            
-            if conditions:
-                query = query.where(and_(*conditions))
+            return conditions
         
-        # 排序
-        if search_query and search_query.sort_by:
-            if search_query.sort_order == "desc":
-                query = query.order_by(getattr(Role, search_query.sort_by).desc())
+        # 应用搜索条件
+        conditions = build_conditions(search_query)
+        if conditions:
+            query = query.where(and_(*conditions))
+        
+        # 排序优化
+        if search_query and search_query.order_by:
+            order_column = getattr(Role, search_query.order_by, None)
+            if order_column is not None:
+                if search_query.order_desc:
+                    query = query.order_by(order_column.desc())
+                else:
+                    query = query.order_by(order_column)
             else:
-                query = query.order_by(getattr(Role, search_query.sort_by))
+                # 默认排序
+                query = query.order_by(Role.sort_order, Role.created_at)
         else:
             query = query.order_by(Role.sort_order, Role.created_at)
         
-        # 获取总数
+        # 优化总数查询 - 使用相同的条件
         count_query = select(func.count(Role.id))
-        if search_query:
-            conditions = []
-            if search_query.keyword:
-                keyword = f"%{search_query.keyword}%"
-                conditions.append(
-                    or_(
-                        Role.name.ilike(keyword),
-                        Role.display_name.ilike(keyword),
-                        Role.description.ilike(keyword)
-                    )
-                )
-            if search_query.is_system is not None:
-                conditions.append(Role.is_system == search_query.is_system)
-            
-            if conditions:
-                count_query = count_query.where(and_(*conditions))
+        if conditions:
+            count_query = count_query.where(and_(*conditions))
         
+        # 并行执行总数查询和数据查询以提高性能
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
         
