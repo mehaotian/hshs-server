@@ -8,6 +8,7 @@ API v1 路由初始化模块
 - 角色权限路由 (roles)
 - 剧本管理路由 (scripts)
 - 音频管理路由 (audios)
+- 部门管理路由 (departments)
 """
 
 from fastapi import APIRouter
@@ -17,6 +18,7 @@ from .users import router as users_router
 from .roles import router as roles_router
 from .scripts import router as scripts_router
 from .audios import router as audios_router
+from .departments import router as departments_router
 
 # 创建 v1 版本的主路由
 api_v1_router = APIRouter(prefix="/v1")
@@ -50,6 +52,10 @@ api_v1_router.include_router(
     audios_router,
     prefix="/audios",
     tags=["音频管理"]
+)
+
+api_v1_router.include_router(
+    departments_router
 )
 
 # 导出主路由
