@@ -358,14 +358,17 @@ async def logout(
         raise_business_error("登出失败", 1000)
 
 
-@router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
+@router.get("/me", response_model=UserResponse, summary="获取当前用户信息（已废弃）")
 async def get_current_user_info(
     current_user: User = Depends(get_current_active_user)
 ):
-    """获取当前登录用户的详细信息"""
+    """获取当前登录用户的详细信息
+    
+    ⚠️ 此接口已废弃，请使用 GET /api/v1/users/me 替代
+    """
     return ResponseBuilder.success(
-        data=current_user,
-        message="获取用户信息成功"
+        data=current_user.to_dict_sync(include_sensitive=True),
+        message="获取用户信息成功（此接口已废弃，请使用 /api/v1/users/me）"
     )
 
 

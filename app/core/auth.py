@@ -6,6 +6,7 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -146,11 +147,15 @@ class AuthManager:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # 查询用户
+        # 查询用户并预加载角色和权限关系
         result = await db.execute(
-            select(User).where(User.id == user_id)
+            select(User)
+            .options(
+                joinedload(User.user_roles).joinedload(UserRole.role)
+            )
+            .where(User.id == user_id)
         )
-        user = result.scalar_one_or_none()
+        user = result.unique().scalar_one_or_none()
         
         if user is None:
             raise HTTPException(

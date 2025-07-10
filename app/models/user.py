@@ -77,28 +77,42 @@ class User(Base):
         """获取用户所有权限"""
         if db is None:
             # 如果没有传入db会话，尝试从已加载的关系中获取
-            permissions = set()
-            for user_role in self.user_roles:
-                if user_role.role and user_role.role.permissions:
-                    role_permissions = user_role.role.permissions.get('permissions', [])
-                    permissions.update(role_permissions)
-            return list(permissions)
+            try:
+                permissions = set()
+                for user_role in self.user_roles:
+                    if user_role.role:
+                        # 使用Role模型的permission_list属性来获取权限
+                        role_permissions = user_role.role.permission_list
+                        permissions.update(role_permissions)
+                return list(permissions)
+            except Exception as e:
+                # 如果出错，记录错误并返回空列表
+                print(f"Error getting permissions: {e}")
+                return []
         
         # 使用数据库会话查询权限
         from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
         from app.models.role import UserRole, Role
         
+        # 查询用户的角色，并预加载权限信息
         result = await db.execute(
-            select(Role.permissions)
+            select(Role)
             .join(UserRole, Role.id == UserRole.role_id)
             .where(UserRole.user_id == self.id)
         )
         
         permissions = set()
-        for row in result.fetchall():
-            if row[0] and isinstance(row[0], dict):
-                role_permissions = row[0].get('permissions', [])
+        roles = result.scalars().all()
+        for role in roles:
+            try:
+                # 使用Role模型的permission_list属性来获取权限
+                role_permissions = role.permission_list
                 permissions.update(role_permissions)
+            except Exception as e:
+                # 如果出错，记录错误并继续处理其他角色
+                print(f"Error getting permissions for role {role.name}: {e}")
+                continue
         return list(permissions)
     
     async def has_permission(self, permission: str, db=None) -> bool:
@@ -109,6 +123,9 @@ class User(Base):
     def update_login_info(self) -> None:
         """更新登录信息"""
         self.last_login_at = datetime.utcnow()
+        # 确保 login_count 不为 None
+        if self.login_count is None:
+            self.login_count = 0
         self.login_count += 1
     
     async def to_dict(self, include_sensitive: bool = False, db=None) -> Dict[str, Any]:
@@ -171,11 +188,14 @@ class User(Base):
             try:
                 permissions = set()
                 for user_role in self.user_roles:
-                    if user_role.role and user_role.role.permissions:
-                        role_permissions = user_role.role.permissions.get('permissions', [])
+                    if user_role.role:
+                        # 使用Role模型的permission_list属性来获取权限
+                        role_permissions = user_role.role.permission_list
                         permissions.update(role_permissions)
                 data['permissions'] = list(permissions)
-            except:
+            except Exception as e:
+                # 如果出错，记录错误并返回空列表
+                print(f"Error getting permissions: {e}")
                 data['permissions'] = []
         
         return data

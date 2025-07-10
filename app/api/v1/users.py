@@ -60,18 +60,6 @@ async def create_user(
         logger.error(f"Failed to create user: {str(e)}")
         raise_business_error("创建用户失败", 1000)
 
-
-@router.get("/profile", response_model=UserResponse, summary="获取当前用户信息")
-async def get_current_user(
-    current_user: User = Depends(get_current_active_user)
-):
-    """获取当前登录用户的信息"""
-    return ResponseBuilder.success(
-        data=current_user.to_dict_sync(),
-        message="获取用户信息成功"
-    )
-
-
 @router.put("/update-profile", response_model=UserResponse, summary="更新当前用户信息")
 async def update_current_user(
     user_data: UserUpdate,
@@ -412,6 +400,19 @@ async def get_user_profile_by_id(
     except Exception as e:
         logger.error(f"Failed to get user profile: {str(e)}")
         raise_business_error("获取用户档案失败", 1000)
+
+
+# ==================== 当前用户信息查询 ====================
+
+@router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
+async def get_current_user_info(
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取当前登录用户的详细信息（包括角色和权限）"""
+    return ResponseBuilder.success(
+        data=current_user.to_dict_sync(include_sensitive=True),
+        message="获取用户信息成功"
+    )
 
 
 # ==================== 用户角色和权限查询 ====================
