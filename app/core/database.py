@@ -57,7 +57,7 @@ async def init_db() -> None:
     """初始化数据库表结构"""
     try:
         # 导入所有模型以确保它们被注册到Base.metadata
-        from app.models import user, role, script, audio  # noqa
+        from app.models import user, role, script, audio, department  # noqa
         
         async with engine.begin() as conn:
             # 创建所有表

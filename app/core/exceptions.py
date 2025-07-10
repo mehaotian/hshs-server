@@ -295,7 +295,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         503: (1007, "服务暂不可用"),  # 服务暂不可用
     }
     
-    business_code, chinese_message = status_code_mapping.get(exc.status_code, (1000, "系统内部错误"))
+    # 对于400状态码的业务异常，保留原始错误信息
+    if exc.status_code == 400:
+        business_code = 1001  # 业务逻辑错误
+        error_message = exc.detail  # 保留原始错误信息
+    else:
+        business_code, error_message = status_code_mapping.get(exc.status_code, (1000, "系统内部错误"))
     
     # 记录异常日志
     logger.warning(
@@ -309,7 +314,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         status_code=200,
         content={
             "code": business_code,
-            "message": chinese_message,
+            "message": error_message,
             "data": {}
         }
     )

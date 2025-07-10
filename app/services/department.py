@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from app.models.department import Department, DepartmentMember
 from app.models.user import User
 from app.schemas.department import (
-    DepartmentCreate, DepartmentUpdate, DepartmentQuery,
+    DepartmentCreate, DepartmentUpdate, DepartmentQuery, DepartmentQueryExtended,
     DepartmentMemberCreate, DepartmentMemberUpdate,
     DepartmentBatchOperation, DepartmentMove
 )
@@ -73,7 +73,7 @@ class DepartmentService:
             await self.db.flush()  # 获取ID
             
             # 更新路径和层级
-            department.update_path()
+            await department.update_path(self.db)
             await self.db.commit()
             await self.db.refresh(department)
             
@@ -112,7 +112,7 @@ class DepartmentService:
             logger.error(f"获取部门失败: {str(e)}")
             return None
     
-    async def get_departments(self, query_params: DepartmentQuery) -> Tuple[List[Department], int]:
+    async def get_departments(self, query_params: DepartmentQueryExtended) -> Tuple[List[Department], int]:
         """获取部门列表"""
         try:
             # 构建查询条件
@@ -653,12 +653,12 @@ class DepartmentService:
     async def _update_department_hierarchy(self, department: Department) -> None:
         """更新部门层级结构"""
         # 更新当前部门的路径和层级
-        department.update_path()
+        await department.update_path(self.db)
         
         # 递归更新所有子部门的路径和层级
         descendants = await department.get_descendants(self.db, include_self=False)
         for desc in descendants:
-            desc.update_path()
+            await desc.update_path(self.db)
     
     async def _force_delete_department_recursive(self, department: Department) -> None:
         """递归强制删除部门及其子部门"""

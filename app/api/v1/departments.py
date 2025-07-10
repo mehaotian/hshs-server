@@ -11,7 +11,7 @@ from app.models.department import Department
 from app.services.department import DepartmentService
 from app.schemas.department import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
-    DepartmentTreeResponse, DepartmentQuery, DepartmentStatistics,
+    DepartmentTreeResponse, DepartmentQuery, DepartmentQueryExtended, DepartmentStatistics,
     DepartmentBatchOperation, DepartmentMove,
     DepartmentMemberCreate, DepartmentMemberUpdate, DepartmentMemberResponse,
     PositionChangeRequest, DepartmentManagerInfo, PositionStatistics
@@ -68,7 +68,7 @@ async def get_departments(
     """获取部门列表"""
 
     try:
-        query_params = DepartmentQuery(
+        query_params = DepartmentQueryExtended(
             name=name,
             parent_id=parent_id,
             manager_id=manager_id,
@@ -270,7 +270,7 @@ async def batch_operation_departments(
 ):
     """批量操作部门"""
     # 检查权限
-    from app.core.auth import check_permission
+    from app.core.auth import AuthManager
     permission_map = {
         'activate': 'department:update',
         'deactivate': 'department:update',
@@ -279,7 +279,7 @@ async def batch_operation_departments(
 
     required_permission = permission_map.get(operation_data.operation)
     if required_permission:
-        await check_permission(required_permission, current_user, db)
+        await AuthManager.check_permission(current_user, required_permission, db)
 
     try:
         service = DepartmentService(db)

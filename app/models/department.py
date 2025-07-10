@@ -70,15 +70,36 @@ class Department(Base):
         # 这里需要递归获取父部门名称，实际使用时可能需要优化
         return f"{self.parent.get_full_name() if self.parent else ''}/{self.name}"
     
-    def update_path(self) -> None:
+    async def update_path(self, db=None) -> None:
         """更新部门路径"""
         if self.is_root:
             self.path = str(self.id)
             self.level = 1
         else:
-            parent_path = self.parent.path if self.parent else ""
+            # 如果parent已经加载，直接使用
+            if self.parent:
+                parent_path = self.parent.path
+                parent_level = self.parent.level
+            # 否则从数据库查询父部门信息
+            elif db and self.parent_id:
+                from sqlalchemy import select
+                result = await db.execute(
+                    select(Department.path, Department.level)
+                    .where(Department.id == self.parent_id)
+                )
+                parent_data = result.first()
+                if parent_data:
+                    parent_path = parent_data.path
+                    parent_level = parent_data.level
+                else:
+                    parent_path = ""
+                    parent_level = 0
+            else:
+                parent_path = ""
+                parent_level = 0
+            
             self.path = f"{parent_path}/{self.id}"
-            self.level = (self.parent.level if self.parent else 0) + 1
+            self.level = parent_level + 1
     
     async def get_ancestors(self, db) -> List['Department']:
         """获取所有祖先部门"""
@@ -149,41 +170,86 @@ class Department(Base):
         }
         
         # 添加管理员信息
-        if self.manager:
-            data['manager'] = {
-                'id': self.manager.id,
-                'username': self.manager.username,
-                'real_name': self.manager.real_name,
-                'display_name': self.manager.display_name
-            }
+        if self.manager_id and db:
+            try:
+                from sqlalchemy import select
+                from app.models.user import User
+                
+                result = await db.execute(
+                    select(User).where(User.id == self.manager_id)
+                )
+                manager = result.scalar_one_or_none()
+                
+                if manager:
+                    data['manager'] = {
+                        'id': manager.id,
+                        'username': manager.username,
+                        'real_name': manager.real_name,
+                        'display_name': manager.display_name
+                    }
+            except Exception as e:
+                # 如果获取管理员信息失败，不添加manager字段
+                pass
         
         # 添加成员数量
         if db:
-            data['member_count'] = await self.get_member_count(db)
+            try:
+                data['member_count'] = await self.get_member_count(db)
+            except Exception as e:
+                # 如果获取成员数量失败，设置为0
+                data['member_count'] = 0
+        else:
+            data['member_count'] = 0
         
         # 添加子部门
-        if include_children and self.children:
-            data['children'] = [await child.to_dict(db, include_children=True) for child in self.children if child.is_active]
+        if include_children and db:
+            try:
+                from sqlalchemy import select
+                
+                result = await db.execute(
+                    select(Department)
+                    .where(Department.parent_id == self.id)
+                    .where(Department.status == Department.STATUS_ACTIVE)
+                    .order_by(Department.sort_order)
+                )
+                children = result.scalars().all()
+                
+                children_data = []
+                for child in children:
+                    try:
+                        child_dict = await child.to_dict(db, include_children=True)
+                        children_data.append(child_dict)
+                    except Exception as e:
+                        # 如果子部门转换失败，跳过该子部门
+                        continue
+                data['children'] = children_data
+            except Exception as e:
+                # 如果获取子部门失败，设置为空列表
+                data['children'] = []
         
         # 添加成员列表
         if include_members and db:
-            from sqlalchemy import select
-            from app.models.user import User
-            
-            result = await db.execute(
-                select(User)
-                .join(DepartmentMember, User.id == DepartmentMember.user_id)
-                .where(DepartmentMember.department_id == self.id)
-                .where(DepartmentMember.status == DepartmentMember.STATUS_ACTIVE)
-            )
-            members = result.scalars().all()
-            data['members'] = [{
-                'id': member.id,
-                'username': member.username,
-                'real_name': member.real_name,
-                'display_name': member.display_name,
-                'avatar_url': member.avatar_url
-            } for member in members]
+            try:
+                from sqlalchemy import select
+                from app.models.user import User
+                
+                result = await db.execute(
+                    select(User)
+                    .join(DepartmentMember, User.id == DepartmentMember.user_id)
+                    .where(DepartmentMember.department_id == self.id)
+                    .where(DepartmentMember.status == DepartmentMember.STATUS_ACTIVE)
+                )
+                members = result.scalars().all()
+                data['members'] = [{
+                    'id': member.id,
+                    'username': member.username,
+                    'real_name': member.real_name,
+                    'display_name': member.display_name,
+                    'avatar_url': member.avatar_url
+                } for member in members]
+            except Exception as e:
+                # 如果获取成员列表失败，设置为空列表
+                data['members'] = []
         
         return data
 
