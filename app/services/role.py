@@ -629,7 +629,7 @@ class RoleService:
         
         # 系统角色数
         system_roles_result = await self.db.execute(
-            select(func.count(Role.id)).where(Role.is_system == True)
+            select(func.count(Role.id)).where(Role.is_system == 1)
         )
         system_roles = system_roles_result.scalar()
         
