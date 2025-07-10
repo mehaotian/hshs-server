@@ -676,3 +676,232 @@ class DepartmentService:
         
         # 删除当前部门
         department.status = Department.STATUS_DELETED
+    
+    # 职位管理方法
+    async def set_member_position(self, department_id: int, user_id: int, position_type: str, current_user_id: int) -> DepartmentMember:
+        """设置成员职位"""
+        try:
+            from app.models.department import PositionType
+            
+            # 验证职位类型
+            if position_type not in [pos.value for pos in PositionType]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="无效的职位类型"
+                )
+            
+            # 检查部门是否存在
+            department = await self.get_department_by_id(department_id)
+            if not department:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="部门不存在"
+                )
+            
+            # 检查成员是否存在
+            member = await self._get_department_member(department_id, user_id)
+            if not member or not member.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="成员不存在或已离职"
+                )
+            
+            # 检查权限（只有部门负责人或系统管理员可以设置职位）
+            current_member = await self._get_department_member(department_id, current_user_id)
+            if not (current_member and current_member.is_manager):
+                # 这里可以添加系统管理员权限检查
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="无权限设置成员职位"
+                )
+            
+            # 如果设置为部长，检查是否已有部长
+            if position_type == PositionType.MANAGER.value:
+                existing_manager = await self.db.execute(
+                    select(DepartmentMember).where(
+                        and_(
+                            DepartmentMember.department_id == department_id,
+                            DepartmentMember.position_type == PositionType.MANAGER,
+                            DepartmentMember.status == DepartmentMember.STATUS_ACTIVE,
+                            DepartmentMember.user_id != user_id
+                        )
+                    )
+                )
+                if existing_manager.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="该部门已有部长，请先移除现有部长"
+                    )
+            
+            # 更新职位
+            member.position_type = PositionType(position_type)
+            member.update_is_manager_field()
+            
+            # 如果设置为部长，同步更新部门的manager_id
+            if position_type == PositionType.MANAGER.value:
+                department.manager_id = user_id
+                # 获取用户信息更新manager_name
+                user = await self._get_user_by_id(user_id)
+                if user:
+                    department.manager_name = user.real_name or user.username
+            
+            await self.db.commit()
+            await self.db.refresh(member)
+            
+            logger.info(f"成员职位设置成功: 部门{department_id}, 用户{user_id}, 职位{position_type}")
+            return member
+            
+        except HTTPException:
+            await self.db.rollback()
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"设置成员职位失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="设置成员职位失败"
+            )
+    
+    async def get_department_management(self, department_id: int) -> Dict[str, Any]:
+        """获取部门管理层信息"""
+        try:
+            from app.models.department import PositionType
+            
+            # 检查部门是否存在
+            department = await self.get_department_by_id(department_id)
+            if not department:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="部门不存在"
+                )
+            
+            # 获取管理层成员
+            result = await self.db.execute(
+                select(DepartmentMember, User)
+                .join(User, DepartmentMember.user_id == User.id)
+                .where(
+                    and_(
+                        DepartmentMember.department_id == department_id,
+                        DepartmentMember.position_type.in_([PositionType.MANAGER, PositionType.DEPUTY_MANAGER]),
+                        DepartmentMember.status == DepartmentMember.STATUS_ACTIVE
+                    )
+                )
+                .order_by(DepartmentMember.position_type.desc(), DepartmentMember.joined_at)
+            )
+            
+            management_members = []
+            manager = None
+            deputy_managers = []
+            
+            for member, user in result.fetchall():
+                member_info = {
+                    'id': member.id,
+                    'user_id': user.id,
+                    'username': user.username,
+                    'real_name': user.real_name,
+                    'display_name': user.real_name or user.username,
+                    'avatar_url': user.avatar_url,
+                    'position': member.position,
+                    'position_type': member.position_type,
+                    'position_display': member.get_position_display(),
+                    'joined_at': member.joined_at
+                }
+                
+                if member.position_type == PositionType.MANAGER:
+                    manager = member_info
+                elif member.position_type == PositionType.DEPUTY_MANAGER:
+                    deputy_managers.append(member_info)
+                
+                management_members.append(member_info)
+            
+            return {
+                'department_id': department_id,
+                'department_name': department.name,
+                'manager': manager,
+                'deputy_managers': deputy_managers,
+                'all_management': management_members,
+                'statistics': {
+                    'manager_count': 1 if manager else 0,
+                    'deputy_manager_count': len(deputy_managers),
+                    'total_management_count': len(management_members)
+                }
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"获取部门管理层信息失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="获取部门管理层信息失败"
+            )
+    
+    async def get_position_statistics(self, department_id: int, include_children: bool = False) -> Dict[str, Any]:
+        """获取职位统计信息"""
+        try:
+            from app.models.department import PositionType
+            
+            # 检查部门是否存在
+            department = await self.get_department_by_id(department_id)
+            if not department:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="部门不存在"
+                )
+            
+            # 构建查询条件
+            if include_children:
+                # 包含子部门：获取所有后代部门ID
+                descendants = await department.get_descendants(self.db, include_self=True)
+                department_ids = [dept.id for dept in descendants]
+                query_condition = DepartmentMember.department_id.in_(department_ids)
+            else:
+                # 仅当前部门
+                query_condition = DepartmentMember.department_id == department_id
+            
+            # 按职位类型统计
+            result = await self.db.execute(
+                select(
+                    DepartmentMember.position_type,
+                    func.count(DepartmentMember.id).label('count')
+                )
+                .where(
+                    and_(
+                        query_condition,
+                        DepartmentMember.status == DepartmentMember.STATUS_ACTIVE
+                    )
+                )
+                .group_by(DepartmentMember.position_type)
+            )
+            
+            position_counts = {pos_type: count for pos_type, count in result.fetchall()}
+            
+            # 计算各职位数量
+            manager_count = position_counts.get(PositionType.MANAGER, 0)
+            deputy_manager_count = position_counts.get(PositionType.DEPUTY_MANAGER, 0)
+            regular_member_count = position_counts.get(PositionType.MEMBER, 0)
+            total_members = sum(position_counts.values())
+            
+            return {
+                'department_id': department_id,
+                'department_name': department.name,
+                'include_children': include_children,
+                'total_members': total_members,
+                'manager_count': manager_count,
+                'deputy_manager_count': deputy_manager_count,
+                'regular_member_count': regular_member_count,
+                'position_distribution': {
+                    'manager_percentage': round(manager_count / total_members * 100, 2) if total_members > 0 else 0,
+                    'deputy_manager_percentage': round(deputy_manager_count / total_members * 100, 2) if total_members > 0 else 0,
+                    'regular_member_percentage': round(regular_member_count / total_members * 100, 2) if total_members > 0 else 0
+                }
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"获取职位统计信息失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="获取职位统计信息失败"
+            )

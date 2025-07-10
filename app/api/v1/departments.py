@@ -13,7 +13,8 @@ from app.schemas.department import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
     DepartmentTreeResponse, DepartmentQuery, DepartmentStatistics,
     DepartmentBatchOperation, DepartmentMove,
-    DepartmentMemberCreate, DepartmentMemberUpdate, DepartmentMemberResponse
+    DepartmentMemberCreate, DepartmentMemberUpdate, DepartmentMemberResponse,
+    PositionChangeRequest, DepartmentManagerInfo, PositionStatistics
 )
 from app.core.response import ResponseBuilder
 from app.core.logger import logger
@@ -341,7 +342,7 @@ async def add_department_member(
     try:
         service = DepartmentService(db)
         member = await service.add_department_member(department_id, member_data)
-
+        
         # 转换为响应格式
         member_dict = {
             'id': member.id,
@@ -349,6 +350,8 @@ async def add_department_member(
             'user_id': member.user_id,
             'position': member.position,
             'is_manager': member.is_manager,
+            'position_type': member.position_type if hasattr(member, 'position_type') else None,
+            'position_display': member.get_position_display() if hasattr(member, 'get_position_display') else None,
             'status': member.status,
             'joined_at': member.joined_at,
             'left_at': member.left_at,
@@ -405,6 +408,8 @@ async def get_department_members(
                 'user_id': member.user_id,
                 'position': member.position,
                 'is_manager': member.is_manager,
+                'position_type': member.position_type if hasattr(member, 'position_type') else None,
+                'position_display': member.get_position_display() if hasattr(member, 'get_position_display') else None,
                 'status': member.status,
                 'joined_at': member.joined_at,
                 'left_at': member.left_at,
@@ -425,6 +430,19 @@ async def get_department_members(
                 }
 
             member_list.append(member_dict)
+        
+        # 按职位类型排序：部长 > 副部长 > 普通成员
+        from app.models.department import PositionType
+        def sort_key(member):
+            pos_type = member.get('position_type')
+            if pos_type == PositionType.MANAGER:
+                return 0
+            elif pos_type == PositionType.DEPUTY_MANAGER:
+                return 1
+            else:
+                return 2
+        
+        member_list.sort(key=sort_key)
 
         return ResponseBuilder.success(
             data=member_list,
@@ -475,6 +493,10 @@ async def update_department_member(
         update_dict = update_data.dict(exclude_unset=True)
         for field, value in update_dict.items():
             setattr(member, field, value)
+        
+        # 如果更新了position_type，需要同步更新is_manager字段
+        if hasattr(member, 'position_type') and hasattr(member, 'update_is_manager_field'):
+            member.update_is_manager_field()
 
         await db.commit()
         await db.refresh(member)
@@ -486,6 +508,8 @@ async def update_department_member(
             'user_id': member.user_id,
             'position': member.position,
             'is_manager': member.is_manager,
+            'position_type': member.position_type if hasattr(member, 'position_type') else None,
+            'position_display': member.get_position_display() if hasattr(member, 'get_position_display') else None,
             'status': member.status,
             'joined_at': member.joined_at,
             'left_at': member.left_at,
@@ -558,4 +582,210 @@ async def remove_department_member(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="移除部门成员失败"
+        )
+
+
+# 职位管理相关接口
+@router.put("/members/position/{department_id}/{user_id}", summary="设置成员职位")
+async def set_member_position(
+    department_id: int,
+    user_id: int,
+    position_request: PositionChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("department:update"))
+):
+    """设置成员职位（部长/副部长/普通成员）"""
+    
+    try:
+        service = DepartmentService(db)
+        member = await service.set_member_position(
+            department_id=department_id,
+            user_id=user_id,
+            position_type=position_request.position_type.value,
+            current_user_id=current_user.id
+        )
+        
+        # 转换为响应格式
+        member_dict = {
+            'id': member.id,
+            'department_id': member.department_id,
+            'user_id': member.user_id,
+            'position': member.position,
+            'is_manager': member.is_manager,
+            'position_type': member.position_type,
+            'position_display': member.get_position_display(),
+            'status': member.status,
+            'joined_at': member.joined_at,
+            'updated_at': member.updated_at
+        }
+        
+        return ResponseBuilder.success(
+            data=member_dict,
+            message=f"成员职位设置成功：{member.get_position_display()}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"设置成员职位失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="设置成员职位失败"
+        )
+
+
+@router.get("/management/{department_id}", summary="获取部门管理层信息")
+async def get_department_management(
+    department_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("department:read"))
+):
+    """获取部门管理层信息（部长和副部长）"""
+    
+    try:
+        service = DepartmentService(db)
+        management_info = await service.get_department_management(department_id)
+        
+        return ResponseBuilder.success(
+            data=management_info,
+            message="获取部门管理层信息成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取部门管理层信息失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取部门管理层信息失败"
+        )
+
+
+@router.get("/position-statistics/{department_id}", summary="获取职位统计信息")
+async def get_position_statistics(
+    department_id: int,
+    include_children: bool = Query(False, description="是否包含子部门"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("department:read"))
+):
+    """获取部门职位统计信息"""
+    
+    try:
+        service = DepartmentService(db)
+        statistics = await service.get_position_statistics(
+            department_id=department_id,
+            include_children=include_children
+        )
+        
+        return ResponseBuilder.success(
+            data=statistics,
+            message="获取职位统计信息成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取职位统计信息失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取职位统计信息失败"
+        )
+
+
+@router.post("/set-manager/{department_id}/{user_id}", summary="设置部长")
+async def set_department_manager(
+    department_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("department:update"))
+):
+    """设置部门部长（快捷接口）"""
+    
+    try:
+        from app.models.department import PositionType
+        
+        service = DepartmentService(db)
+        member = await service.set_member_position(
+            department_id=department_id,
+            user_id=user_id,
+            position_type=PositionType.MANAGER.value,
+            current_user_id=current_user.id
+        )
+        
+        return ResponseBuilder.success(
+            data={'success': True, 'manager_id': user_id},
+            message="部长设置成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"设置部长失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="设置部长失败"
+        )
+
+
+@router.post("/add-deputy-manager/{department_id}/{user_id}", summary="添加副部长")
+async def add_deputy_manager(
+    department_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("department:update"))
+):
+    """添加副部长（快捷接口）"""
+    
+    try:
+        from app.models.department import PositionType
+        
+        service = DepartmentService(db)
+        member = await service.set_member_position(
+            department_id=department_id,
+            user_id=user_id,
+            position_type=PositionType.DEPUTY_MANAGER.value,
+            current_user_id=current_user.id
+        )
+        
+        return ResponseBuilder.success(
+            data={'success': True, 'deputy_manager_id': user_id},
+            message="副部长添加成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"添加副部长失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="添加副部长失败"
+        )
+
+
+@router.delete("/remove-deputy-manager/{department_id}/{user_id}", summary="移除副部长")
+async def remove_deputy_manager(
+    department_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("department:update"))
+):
+    """移除副部长（设置为普通成员）"""
+    
+    try:
+        from app.models.department import PositionType
+        
+        service = DepartmentService(db)
+        member = await service.set_member_position(
+            department_id=department_id,
+            user_id=user_id,
+            position_type=PositionType.MEMBER.value,
+            current_user_id=current_user.id
+        )
+        
+        return ResponseBuilder.success(
+            data={'success': True},
+            message="副部长移除成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"移除副部长失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="移除副部长失败"
         )

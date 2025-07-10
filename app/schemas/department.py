@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from enum import IntEnum
+from enum import IntEnum, Enum
 
 
 class DepartmentStatus(IntEnum):
@@ -16,6 +16,13 @@ class MemberStatus(IntEnum):
     INACTIVE = 0
     ACTIVE = 1
     TRANSFERRED = 2
+
+
+class PositionType(str, Enum):
+    """职位类型枚举"""
+    MEMBER = "MEMBER"              # 普通成员
+    DEPUTY_MANAGER = "DEPUTY_MANAGER"  # 副部长
+    MANAGER = "MANAGER"            # 部长
 
 
 # 基础部门信息
@@ -97,6 +104,8 @@ class DepartmentMemberInfo(BaseModel):
     avatar_url: Optional[str]
     position: Optional[str]
     is_manager: bool
+    position_type: PositionType
+    position_display: Optional[str] = None
     status: MemberStatus
     joined_at: datetime
     left_at: Optional[datetime]
@@ -144,6 +153,7 @@ class DepartmentMemberBase(BaseModel):
     user_id: int = Field(..., description="用户ID")
     position: Optional[str] = Field(None, max_length=100, description="职位")
     is_manager: bool = Field(False, description="是否为部门负责人")
+    position_type: PositionType = Field(PositionType.MEMBER, description="职位类型")
     status: MemberStatus = Field(MemberStatus.ACTIVE, description="成员状态")
     remarks: Optional[str] = Field(None, description="备注信息")
 
@@ -157,6 +167,7 @@ class DepartmentMemberUpdate(BaseModel):
     """更新部门成员请求"""
     position: Optional[str] = Field(None, max_length=100, description="职位")
     is_manager: Optional[bool] = Field(None, description="是否为部门负责人")
+    position_type: Optional[PositionType] = Field(None, description="职位类型")
     status: Optional[MemberStatus] = Field(None, description="成员状态")
     remarks: Optional[str] = Field(None, description="备注信息")
 
@@ -198,6 +209,36 @@ class DepartmentQuery(BaseModel):
     parent_id: Optional[int] = Field(None, description="上级部门ID")
     manager_id: Optional[int] = Field(None, description="负责人ID")
     status: Optional[DepartmentStatus] = Field(None, description="部门状态")
+
+
+# 职位管理相关Schema
+class PositionChangeRequest(BaseModel):
+    """职位变更请求"""
+    user_id: int = Field(..., description="用户ID")
+    position_type: PositionType = Field(..., description="新职位类型")
+    remarks: Optional[str] = Field(None, description="变更备注")
+
+
+class DepartmentManagerInfo(BaseModel):
+    """部门管理层信息"""
+    manager: Optional[DepartmentMemberInfo] = Field(None, description="部长信息")
+    deputy_managers: List[DepartmentMemberInfo] = Field(default_factory=list, description="副部长列表")
+    
+    class Config:
+        from_attributes = True
+
+
+class PositionStatistics(BaseModel):
+    """职位统计信息"""
+    total_members: int = Field(..., description="总成员数")
+    manager_count: int = Field(..., description="部长数量")
+    deputy_manager_count: int = Field(..., description="副部长数量")
+    regular_member_count: int = Field(..., description="普通成员数量")
+
+
+# 部门查询扩展参数
+class DepartmentQueryExtended(DepartmentQuery):
+    """扩展的部门查询参数"""
     level: Optional[int] = Field(None, description="部门层级")
     include_children: bool = Field(False, description="是否包含子部门")
     include_members: bool = Field(False, description="是否包含成员信息")

@@ -1,9 +1,17 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from typing import Optional, List, Dict, Any
+from enum import Enum as PyEnum
 
 from app.core.database import Base
+
+
+class PositionType(PyEnum):
+    """职位类型枚举"""
+    MEMBER = "MEMBER"              # 普通成员
+    DEPUTY_MANAGER = "DEPUTY_MANAGER"  # 副部长
+    MANAGER = "MANAGER"            # 部长
 
 
 class Department(Base):
@@ -195,6 +203,7 @@ class DepartmentMember(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, comment="用户ID")
     position = Column(String(100), nullable=True, comment="职位")
     is_manager = Column(Boolean, default=False, comment="是否为部门负责人")
+    position_type = Column(Enum(PositionType), default=PositionType.MEMBER, nullable=False, comment="职位类型：MEMBER-普通成员，DEPUTY_MANAGER-副部长，MANAGER-部长")
     status = Column(Integer, default=1, comment="成员状态：1-在职，0-离职，2-调岗")
     joined_at = Column(DateTime, default=func.now(), comment="加入时间")
     left_at = Column(DateTime, nullable=True, comment="离开时间")
@@ -209,9 +218,37 @@ class DepartmentMember(Base):
     user = relationship("User")
     
     def __repr__(self) -> str:
-        return f"<DepartmentMember(department_id={self.department_id}, user_id={self.user_id}, position='{self.position}')>"
+        return f"<DepartmentMember(department_id={self.department_id}, user_id={self.user_id}, position='{self.position}', position_type='{self.position_type.value}')>"
     
     @property
     def is_active(self) -> bool:
         """检查成员是否在职"""
         return self.status == self.STATUS_ACTIVE
+    
+    @property
+    def is_manager_position(self) -> bool:
+        """检查是否为管理职位（部长或副部长）"""
+        return self.position_type in [PositionType.MANAGER, PositionType.DEPUTY_MANAGER]
+    
+    @property
+    def is_department_manager(self) -> bool:
+        """检查是否为部长"""
+        return self.position_type == PositionType.MANAGER
+    
+    @property
+    def is_deputy_manager(self) -> bool:
+        """检查是否为副部长"""
+        return self.position_type == PositionType.DEPUTY_MANAGER
+    
+    def get_position_display(self) -> str:
+        """获取职位显示名称"""
+        position_names = {
+            PositionType.MEMBER: "普通成员",
+            PositionType.DEPUTY_MANAGER: "副部长",
+            PositionType.MANAGER: "部长"
+        }
+        return position_names.get(self.position_type, "未知职位")
+    
+    def update_is_manager_field(self) -> None:
+        """根据position_type更新is_manager字段（保持兼容性）"""
+        self.is_manager = self.position_type == PositionType.MANAGER
