@@ -354,14 +354,20 @@ class UserService:
                         await self.db.execute(
                             update(User)
                             .where(User.id == user_id)
-                            .values(status="active")
+                            .values(status=User.STATUS_ACTIVE)
                         )
                     elif operation.operation == "deactivate":
                         await self.db.execute(
                             update(User)
                             .where(User.id == user_id)
-                            .values(status="inactive")
+                            .values(status=User.STATUS_INACTIVE)
                         )
+                    elif operation.operation == "suspend":
+                         await self.db.execute(
+                             update(User)
+                             .where(User.id == user_id)
+                             .values(status=User.STATUS_SUSPENDED)
+                         )
                     elif operation.operation == "delete":
                         await self.db.execute(
                             delete(User).where(User.id == user_id)
@@ -400,9 +406,21 @@ class UserService:
         
         # 活跃用户数
         active_users_result = await self.db.execute(
-            select(func.count(User.id)).where(User.status == "active")
+            select(func.count(User.id)).where(User.status == User.STATUS_ACTIVE)
         )
         active_users = active_users_result.scalar()
+        
+        # 非活跃用户数
+        inactive_users_result = await self.db.execute(
+            select(func.count(User.id)).where(User.status == User.STATUS_INACTIVE)
+        )
+        inactive_users = inactive_users_result.scalar()
+        
+        # 暂停用户数
+        suspended_users_result = await self.db.execute(
+            select(func.count(User.id)).where(User.status == User.STATUS_SUSPENDED)
+        )
+        suspended_users = suspended_users_result.scalar()
         
         # 今日新增用户
         today = datetime.utcnow().date()
@@ -432,6 +450,8 @@ class UserService:
         return {
             "total_users": total_users,
             "active_users": active_users,
+            "inactive_users": inactive_users,
+            "suspended_users": suspended_users,
             "today_new_users": today_users,
             "week_new_users": week_users,
             "status_distribution": status_stats,

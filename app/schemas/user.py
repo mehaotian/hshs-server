@@ -5,12 +5,12 @@ from datetime import datetime
 from enum import Enum
 
 
-class UserStatus(str, Enum):
+class UserStatus(int, Enum):
     """用户状态枚举"""
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    SUSPENDED = "suspended"
-    DELETED = "deleted"
+    ACTIVE = 1
+    INACTIVE = 0
+    SUSPENDED = -1
+    DELETED = -2
 
 
 class UserBase(BaseModel):

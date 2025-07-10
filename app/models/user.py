@@ -11,6 +11,12 @@ class User(Base):
     """用户模型"""
     __tablename__ = "users"
     __table_args__ = {'comment': '用户基础信息表'}
+    
+    # 用户状态常量
+    STATUS_ACTIVE = 1      # 启用
+    STATUS_INACTIVE = 0    # 禁用
+    STATUS_SUSPENDED = -1  # 暂停
+    STATUS_DELETED = -2    # 删除
 
     id = Column(Integer, primary_key=True, index=True, comment="用户ID")
     username = Column(String(50), unique=True, index=True, nullable=False, comment="用户名")
@@ -44,7 +50,7 @@ class User(Base):
     @property
     def is_active(self) -> bool:
         """检查用户是否激活"""
-        return self.status == 1
+        return self.status == self.STATUS_ACTIVE
     
     @property
     def display_name(self) -> str:
