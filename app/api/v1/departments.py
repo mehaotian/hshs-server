@@ -14,7 +14,7 @@ from app.schemas.department import (
     DepartmentTreeResponse, DepartmentQuery, DepartmentQueryExtended, DepartmentStatistics,
     DepartmentBatchOperation, DepartmentMove,
     DepartmentMemberCreate, DepartmentMemberUpdate, DepartmentMemberResponse,
-    PositionChangeRequest, DepartmentManagerInfo, PositionStatistics
+    PositionChangeRequest, DepartmentManagerInfo, PositionStatistics, DepartmentTreeSimple
 )
 from app.core.response import ResponseBuilder
 from app.core.logger import logger
@@ -106,38 +106,54 @@ async def get_departments(
         )
 
 
-@router.get("/tree/list", summary="获取部门树形结构")
+async def convert_to_simple_tree(dept, db) -> DepartmentTreeSimple:
+    """将部门对象转换为精简的树形结构"""
+    # 获取成员数量
+    member_count = await dept.get_member_count(db)
+    
+    # 获取子部门并递归转换
+    from sqlalchemy import select
+    from app.models.department import Department
+    
+    result = await db.execute(
+        select(Department)
+        .where(Department.parent_id == dept.id)
+        .where(Department.status == Department.STATUS_ACTIVE)
+        .order_by(Department.sort_order)
+    )
+    children_depts = result.scalars().all()
+    
+    children = []
+    for child in children_depts:
+        child_simple = await convert_to_simple_tree(child, db)
+        children.append(child_simple)
+    
+    return DepartmentTreeSimple(
+        id=dept.id,
+        name=dept.name,
+        parent_id=dept.parent_id,
+        level=dept.level,
+        sort_order=dept.sort_order,
+        member_count=member_count,
+        children=children
+    )
+
+
+@router.get("/tree/list", response_model=List[DepartmentTreeSimple], summary="获取部门树形结构")
 async def get_department_tree(
-    root_id: Optional[int] = Query(None, description="根部门ID"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("department:read"))
+    root_id: Optional[int] = Query(None, description="根部门ID，不传则获取所有根部门"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """获取部门树形结构"""
-
-    try:
-        service = DepartmentService(db)
-        departments = await service.get_department_tree(root_id)
-
-        # 转换为树形结构
-        tree_data = []
-        for dept in departments:
-            dept_dict = await dept.to_dict(db)
-            # 添加成员数量
-            dept_dict['member_count'] = await dept.get_member_count(db)
-            tree_data.append(dept_dict)
-
-        return ResponseBuilder.success(
-            data=tree_data,
-            message="获取部门树成功"
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"获取部门树失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取部门树失败"
-        )
+    """获取部门树（精简版，仅包含渲染必需字段）"""
+    service = DepartmentService(db)
+    departments = await service.get_department_tree(root_id)
+    result = []
+    for dept in departments:
+        # 转换为精简的树形结构
+        simple_tree = await convert_to_simple_tree(dept, db)
+        result.append(simple_tree)
+    return result
 
 
 @router.get("/statistics/list", summary="获取部门统计信息")

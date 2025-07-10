@@ -147,6 +147,21 @@ class DepartmentTreeResponse(BaseModel):
         from_attributes = True
 
 
+# 精简的部门树形结构响应（用于前端树形组件渲染）
+class DepartmentTreeSimple(BaseModel):
+    """精简的部门树形结构响应，只包含渲染必需的字段"""
+    id: int
+    name: str
+    parent_id: Optional[int] = None
+    level: int = 1
+    sort_order: int = 0
+    member_count: int = 0
+    children: List['DepartmentTreeSimple'] = []
+    
+    class Config:
+        from_attributes = True
+
+
 # 部门成员管理
 class DepartmentMemberBase(BaseModel):
     """部门成员基础信息"""
@@ -268,3 +283,4 @@ class DepartmentMove(BaseModel):
 # 更新递归引用
 DepartmentResponse.model_rebuild()
 DepartmentTreeResponse.model_rebuild()
+DepartmentTreeSimple.model_rebuild()
