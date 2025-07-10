@@ -303,7 +303,7 @@ async def get_user_statistics(
 
 # ==================== 用户档案相关接口 ====================
 
-@router.post("/me/profile", response_model=UserProfileResponse, summary="创建用户档案")
+@router.post("/me/profile/add", response_model=UserProfileResponse, summary="创建用户档案")
 async def create_user_profile(
     profile_data: UserProfileCreate,
     db: AsyncSession = Depends(get_db),
@@ -352,7 +352,7 @@ async def get_user_profile(
         raise_business_error("获取用户档案失败", 1000)
 
 
-@router.put("/me/profile", response_model=UserProfileResponse, summary="更新用户档案")
+@router.put("/me/profile/update", response_model=UserProfileResponse, summary="更新用户档案")
 async def update_user_profile(
     profile_data: UserProfileUpdate,
     db: AsyncSession = Depends(get_db),
@@ -377,7 +377,7 @@ async def update_user_profile(
         raise_business_error("更新用户档案失败", 1000)
 
 
-@router.get("/{user_id}/profile", response_model=UserProfileResponse, summary="获取指定用户档案")
+@router.get("/profile/{user_id}", response_model=UserProfileResponse, summary="获取指定用户档案")
 async def get_user_profile_by_id(
     user_id: int,
     db: AsyncSession = Depends(get_db),
@@ -455,7 +455,7 @@ async def get_current_user_permissions(
         raise_business_error("获取用户权限失败", 1000)
 
 
-@router.get("/{user_id}/roles", summary="获取指定用户角色")
+@router.get("/roles/{user_id}", summary="获取指定用户角色")
 async def get_user_roles_by_id(
     user_id: int,
     db: AsyncSession = Depends(get_db),

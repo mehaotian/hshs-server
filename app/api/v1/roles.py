@@ -463,7 +463,7 @@ async def batch_assign_roles(
         raise_business_error("批量分配角色失败", 1000)
 
 
-@router.get("/user/{user_id}/roles", summary="获取用户角色")
+@router.get("/user/{user_id}", summary="获取用户角色")
 async def get_user_roles(
     user_id: int,
     db: AsyncSession = Depends(get_db),
@@ -516,7 +516,7 @@ async def get_role_users(
 
 # ==================== 权限检查 ====================
 
-@router.get("/user/{user_id}/permissions", summary="获取用户权限")
+@router.get("/user/permissions/{user_id}", summary="获取用户权限")
 async def get_user_permissions(
     user_id: int,
     db: AsyncSession = Depends(get_db),
