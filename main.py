@@ -39,7 +39,10 @@ def create_app() -> FastAPI:
         description=settings.PROJECT_DESCRIPTION,
         version=settings.PROJECT_VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
-        docs_url="/docs" if settings.DEBUG else None,  # Swagger UI 文档
+        swagger_js_url="/static/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger-ui.css",
+        swagger_favicon_url="/static/favicon.png",
+        docs_url=None,  # 禁用默认docs，我们将手动创建
         redoc_url="/redoc" if settings.DEBUG else None,  # ReDoc 文档
         lifespan=lifespan,
     )
@@ -66,6 +69,38 @@ def create_app() -> FastAPI:
     # 静态文件服务（用于音频文件等）
     if settings.STATIC_FILES_DIR:
         app.mount("/static", StaticFiles(directory=settings.STATIC_FILES_DIR), name="static")
+    
+    # 自定义Swagger UI文档页面
+    if settings.DEBUG:
+        from fastapi.responses import HTMLResponse
+        
+        @app.get("/docs", response_class=HTMLResponse)
+        async def custom_swagger_ui_html():
+            """自定义Swagger UI文档页面，使用本地静态文件"""
+            return f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>{settings.PROJECT_NAME} - API Documentation</title>
+                <link rel="stylesheet" type="text/css" href="/static/swagger-ui.css" />
+                <link rel="icon" type="image/png" href="/static/favicon.png" />
+            </head>
+            <body>
+                <div id="swagger-ui"></div>
+                <script src="/static/swagger-ui-bundle.js"></script>
+                <script>
+                    SwaggerUIBundle({{
+                        url: '{settings.API_V1_STR}/openapi.json',
+                        dom_id: '#swagger-ui',
+                        presets: [
+                            SwaggerUIBundle.presets.apis,
+                            SwaggerUIBundle.presets.standalone
+                        ]
+                    }});
+                </script>
+            </body>
+            </html>
+            """
     
     # 健康检查端点
     @app.get("/health")
