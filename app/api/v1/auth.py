@@ -319,7 +319,7 @@ async def refresh_token(
             expires_delta=refresh_token_expires
         )
         
-        logger.log_security_event(
+        log_security_event(
             "token_refreshed",
             user_id=user.id,
             details={"username": user.username}
@@ -343,7 +343,7 @@ async def logout(
 ):
     """用户登出（客户端需要删除本地令牌）"""
     try:
-        logger.log_security_event(
+        log_security_event(
             "user_logout",
             user_id=current_user.id,
             details={"username": current_user.username}
@@ -395,7 +395,7 @@ async def change_password(
         
         await user_service.update_password(current_user.id, password_update)
         
-        logger.log_security_event(
+        log_security_event(
             "password_changed",
             user_id=current_user.id,
             details={"username": current_user.username}
@@ -429,7 +429,7 @@ async def forgot_password(
                 expires_delta=timedelta(hours=1)  # 1小时有效期
             )
             
-            logger.log_security_event(
+            log_security_event(
                 "password_reset_requested",
                 user_id=user.id,
                 details={
@@ -480,7 +480,7 @@ async def reset_password(
         
         await user_service.update_user(user_id, user_update)
         
-        logger.log_security_event(
+        log_security_event(
             "password_reset_completed",
             user_id=user.id,
             details={"username": user.username}

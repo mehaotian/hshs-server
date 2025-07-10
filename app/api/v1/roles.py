@@ -252,7 +252,7 @@ async def create_permission(
         role_service = RoleService(db)
         permission = await role_service.create_permission(permission_data)
 
-        logger.log_security_event(
+        log_security_event(
             "permission_created",
             user_id=current_user.id,
             details=f"permission_name: {permission.name}, permission_id: {permission.id}"
@@ -262,6 +262,9 @@ async def create_permission(
             data=permission.to_dict(),
             message="权限创建成功"
         )
+    except BaseCustomException:
+        # 重新抛出自定义异常，保持原有的错误信息
+        raise
     except Exception as e:
         logger.error(f"Failed to create permission: {str(e)}")
         raise_business_error("创建权限失败", 1000)
@@ -304,7 +307,7 @@ async def update_permission(
         role_service = RoleService(db)
         updated_permission = await role_service.update_permission(permission_id, permission_data)
 
-        logger.log_security_event(
+        log_security_event(
             "permission_updated",
             user_id=current_user.id,
             details=f"permission_id: {permission_id}, updated_fields: {list(permission_data.dict(exclude_unset=True).keys())}"
@@ -330,7 +333,7 @@ async def delete_permission(
         role_service = RoleService(db)
         await role_service.delete_permission(permission_id)
 
-        logger.log_security_event(
+        log_security_event(
             "permission_deleted",
             user_id=current_user.id,
             details=f"permission_id: {permission_id}"
@@ -396,11 +399,10 @@ async def assign_role_to_user(
         role_service = RoleService(db)
         await role_service.assign_role_to_user(assignment.user_id, assignment.role_id)
 
-        logger.log_security_event(
+        log_security_event(
             "role_assigned",
             user_id=current_user.id,
-            target_user_id=assignment.user_id,
-            details=f"role_id: {assignment.role_id}"
+            details=f"target_user_id: {assignment.user_id}, role_id: {assignment.role_id}"
         )
 
         return ResponseBuilder.success(
@@ -422,11 +424,10 @@ async def remove_role_from_user(
         role_service = RoleService(db)
         await role_service.remove_role_from_user(assignment.user_id, assignment.role_id)
 
-        logger.log_security_event(
+        log_security_event(
             "role_removed",
             user_id=current_user.id,
-            target_user_id=assignment.user_id,
-            details=f"role_id: {assignment.role_id}"
+            details=f"target_user_id: {assignment.user_id}, role_id: {assignment.role_id}"
         )
 
         return ResponseBuilder.success(
@@ -448,7 +449,7 @@ async def batch_assign_roles(
         role_service = RoleService(db)
         result = await role_service.batch_assign_roles(operation)
 
-        logger.log_security_event(
+        log_security_event(
             "role_batch_operation",
             user_id=current_user.id,
             details=f"operation: {operation.operation}, user_count: {len(operation.user_ids)}, role_count: {len(operation.role_ids)}, success_count: {result['success_count']}, failed_count: {result['failed_count']}"
@@ -569,7 +570,7 @@ async def init_system_roles(
         role_service = RoleService(db)
         result = await role_service.initialize_system_data()
 
-        logger.log_security_event(
+        log_security_event(
             "system_roles_initialized",
             user_id=current_user.id,
             details=result
