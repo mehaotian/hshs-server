@@ -473,3 +473,23 @@ async def get_user_roles_by_id(
     except Exception as e:
         logger.error(f"Failed to get user roles: {str(e)}")
         raise_business_error("获取用户角色失败", 1000)
+
+
+@router.get("/permissions/{user_id}", summary="获取指定用户权限")
+async def get_user_permissions_by_id(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("user:read"))
+):
+    """获取指定用户的所有权限"""
+    try:
+        user_service = UserService(db)
+        permissions = await user_service.get_user_permissions(user_id)
+        
+        return ResponseBuilder.success(
+            data=permissions,
+            message="获取用户权限成功"
+        )
+    except Exception as e:
+        logger.error(f"Failed to get user permissions: {str(e)}")
+        raise_business_error("获取用户权限失败", 1000)
