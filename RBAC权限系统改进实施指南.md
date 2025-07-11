@@ -99,6 +99,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
 ### 第一阶段：准备工作
 
 1. **数据备份**
+
    ```bash
    # 备份当前数据库
    pg_dump -h localhost -U username -d database_name > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -112,6 +113,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
 ### 第二阶段：迁移执行
 
 1. **运行迁移脚本**
+
    ```bash
    # 预览迁移
    python scripts/migrate_to_rbac.py --dry-run
@@ -131,6 +133,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
 ### 第三阶段：代码重构
 
 1. **更新权限检查逻辑**
+
    ```python
    # 旧代码
    if role.has_permission("user:read"):
@@ -143,6 +146,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
    ```
 
 2. **更新API路由**
+
    ```python
    # 使用新的权限装饰器
    @router.get("/users/{user_id}")
@@ -152,6 +156,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
    ```
 
 3. **更新角色管理**
+
    ```python
    # 角色权限分配
    await service.assign_role_to_user(user_id, role_id, assigned_by)
@@ -179,6 +184,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
 **文件**: `scripts/migrate_to_rbac.py`
 
 **功能**:
+
 - 创建`role_permissions`关联表
 - 创建通配符权限记录
 - 迁移现有角色权限数据
@@ -186,6 +192,7 @@ INSERT INTO permissions (name, display_name, description, module, action, resour
 - 支持回滚操作
 
 **使用方法**:
+
 ```bash
 # 预览迁移
 python scripts/migrate_to_rbac.py --dry-run
@@ -202,6 +209,7 @@ python scripts/migrate_to_rbac.py --rollback
 **文件**: `app/services/rbac_permission_service.py`
 
 **核心功能**:
+
 - 权限检查和验证
 - 通配符权限匹配
 - 用户角色管理
@@ -209,6 +217,7 @@ python scripts/migrate_to_rbac.py --rollback
 - 权限树构建
 
 **主要方法**:
+
 ```python
 # 检查单个权限
 await service.check_permission(user_id, "user:read")
@@ -226,6 +235,7 @@ await service.assign_role_to_user(user_id, role_id, assigned_by)
 ### 3. 权限装饰器
 
 **使用示例**:
+
 ```python
 @require_permission("user:read")
 async def get_user_profile(user_id: int):
@@ -408,6 +418,7 @@ logger.info(f"权限缓存命中率: {cache_stats['hit_rate']:.2%}")
 **原因**: 可能是通配符权限未正确创建或权限匹配逻辑有误
 
 **解决方案**:
+
 1. 检查通配符权限是否正确创建
 2. 验证权限匹配算法
 3. 查看权限检查日志
@@ -417,6 +428,7 @@ logger.info(f"权限缓存命中率: {cache_stats['hit_rate']:.2%}")
 **原因**: 新的三表结构需要JOIN查询，可能影响性能
 
 **解决方案**:
+
 1. 添加适当的数据库索引
 2. 实施权限缓存
 3. 优化查询语句
@@ -427,6 +439,7 @@ logger.info(f"权限缓存命中率: {cache_stats['hit_rate']:.2%}")
 **原因**: 迁移过程中可能出现数据丢失或错误
 
 **解决方案**:
+
 1. 运行数据一致性检查
 2. 对比迁移前后的权限配置
 3. 必要时进行数据修复
