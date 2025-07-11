@@ -59,9 +59,14 @@ class UserService:
     
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """根据ID获取用户"""
+        from app.models.role import UserRole, Role
+        
         result = await self.db.execute(
             select(User)
-            .options(selectinload(User.profile))
+            .options(
+                selectinload(User.profile),
+                selectinload(User.user_roles).selectinload(UserRole.role)
+            )
             .where(User.id == user_id)
         )
         return result.scalar_one_or_none()

@@ -231,13 +231,31 @@ class PermissionSearchQuery(BaseModel):
     """权限搜索查询模型"""
     keyword: Optional[str] = Field(None, description="关键词搜索（权限名称、显示名称）")
     module: Optional[str] = Field(None, description="所属模块")
-    action: Optional[PermissionType] = Field(None, description="操作类型")
-    resource: Optional[ResourceType] = Field(None, description="资源类型")
+    action: Optional[str] = Field(None, description="操作类型")
+    resource: Optional[str] = Field(None, description="资源类型")
     is_system: Optional[bool] = Field(None, description="是否系统权限")
     page: int = Field(1, ge=1, description="页码")
     page_size: int = Field(20, ge=1, le=100, description="每页数量")
     order_by: str = Field("sort_order", description="排序字段")
     order_desc: bool = Field(False, description="是否降序")
+    
+    @validator('action')
+    def validate_action(cls, v):
+        """验证操作类型"""
+        if v is not None:
+            valid_actions = [e.value for e in PermissionType]
+            if v not in valid_actions:
+                raise ValueError(f'操作类型必须是以下值之一: {", ".join(valid_actions)}')
+        return v
+    
+    @validator('resource')
+    def validate_resource(cls, v):
+        """验证资源类型"""
+        if v is not None:
+            valid_resources = [e.value for e in ResourceType]
+            if v not in valid_resources:
+                raise ValueError(f'资源类型必须是以下值之一: {", ".join(valid_resources)}')
+        return v
 
 
 class RolePermissionMatrix(BaseModel):

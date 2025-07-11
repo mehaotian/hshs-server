@@ -13,7 +13,7 @@ from app.core.exceptions import (
 from app.schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
-    UserRoleAssignment, UserRoleBatchOperation, RoleSearchQuery,
+    UserRoleAssignment, UserRoleCreate, UserRoleBatchOperation, RoleSearchQuery,
     PermissionSearchQuery, RoleStatistics
 )
 from app.services.role import RoleService
@@ -389,6 +389,32 @@ async def get_permissions(
             size=size,
             message="获取权限列表成功"
         )
+    except ValueError as e:
+        # 处理 Pydantic 验证错误，提供更友好的错误信息
+        error_msg = str(e)
+        logger.warning(f"Permission query validation error: {error_msg}")
+        
+        # 解析并转换为更友好的中文错误信息
+        if "操作类型必须是以下值之一" in error_msg:
+            friendly_msg = "操作类型参数无效，请使用以下值之一：create（创建）、read（查看）、update（更新）、delete（删除）、assign（分配）、execute（执行）"
+        elif "资源类型必须是以下值之一" in error_msg:
+            friendly_msg = "资源类型参数无效，请使用以下值之一：user（用户）、role（角色）、script（剧本）、audio（音频）、review（审核）、society（社团）、system（系统）"
+        elif "validation error" in error_msg.lower():
+            # 通用参数验证错误
+            if "action" in error_msg:
+                friendly_msg = "操作类型参数格式错误，请检查参数值是否正确"
+            elif "resource" in error_msg:
+                friendly_msg = "资源类型参数格式错误，请检查参数值是否正确"
+            elif "page" in error_msg:
+                friendly_msg = "页码参数必须是大于0的整数"
+            elif "page_size" in error_msg or "size" in error_msg:
+                friendly_msg = "每页数量参数必须是1-100之间的整数"
+            else:
+                friendly_msg = "请求参数格式错误，请检查参数类型和取值范围"
+        else:
+            friendly_msg = "请求参数验证失败，请检查参数格式和取值是否正确"
+        
+        raise_business_error(friendly_msg, 1001)
     except Exception as e:
         logger.error(f"Failed to get permissions: {str(e)}")
         raise_business_error("获取权限列表失败", 1000)
@@ -405,7 +431,12 @@ async def assign_role_to_user(
     """为用户分配角色"""
     try:
         role_service = RoleService(db)
-        await role_service.assign_role_to_user(assignment.user_id, assignment.role_id)
+        # 创建 UserRoleCreate 对象
+        user_role_data = UserRoleCreate(
+            user_id=assignment.user_id,
+            role_id=assignment.role_id
+        )
+        user_role = await role_service.assign_role_to_user(user_role_data)
 
         log_security_event(
             "role_assigned",
@@ -416,6 +447,9 @@ async def assign_role_to_user(
         return ResponseBuilder.success(
             message="角色分配成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器，这样可以返回精确的错误信息
+        raise
     except Exception as e:
         logger.error(f"Failed to assign role: {str(e)}")
         raise_business_error("分配角色失败", 1000)

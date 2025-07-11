@@ -127,7 +127,7 @@ async def get_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("user:read"))
 ):
-    """根据ID获取用户信息"""
+    """根据ID获取用户信息（包括角色和权限）"""
     try:
         user_service = UserService(db)
         user = await user_service.get_user_by_id(user_id)
@@ -135,8 +135,11 @@ async def get_user(
         if not user:
             raise_user_not_found()
         
+        # 使用异步方法获取完整的用户信息，包括角色和权限
+        user_data = await user.to_dict(include_sensitive=True, db=db)
+        
         return ResponseBuilder.success(
-            data=user.to_dict_sync(),
+            data=user_data,
             message="获取用户信息成功"
         )
     except Exception as e:

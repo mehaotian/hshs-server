@@ -180,6 +180,7 @@ def translate_error_message(exc: BaseCustomException) -> str:
         resource_names = {
             "Role": "角色",
             "User": "用户",
+            "UserRole": "用户角色",
             "Permission": "权限",
             "Script": "剧本",
             "Audio": "音频",
