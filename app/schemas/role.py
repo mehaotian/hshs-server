@@ -302,7 +302,23 @@ class RoleStatistics(BaseModel):
 class UserRoleAssignment(BaseModel):
     """用户角色分配模型"""
     user_id: int
-    role_id: int
+    role_ids: List[int] = Field(..., min_items=1, description="角色ID列表")
+    expires_at: Optional[datetime] = Field(None, description="过期时间")
+
+    @validator('expires_at')
+    def validate_expires_at(cls, v):
+        if v and v <= datetime.utcnow():
+            raise ValueError('过期时间必须大于当前时间')
+        return v
+
+    class Config:
+        from_attributes = True
+
+
+class UserRoleRemoval(BaseModel):
+    """用户角色移除模型"""
+    user_id: int
+    role_ids: List[int] = Field(..., min_items=1, description="要移除的角色ID列表")
 
     class Config:
         from_attributes = True

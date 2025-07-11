@@ -415,23 +415,112 @@ class RoleService:
     
     # ==================== 用户角色管理 ====================
     
-    async def assign_role_to_user(self, user_role_data: UserRoleCreate) -> UserRole:
-        """为用户分配角色"""
+    async def assign_roles_to_user(self, user_id: int, role_ids: List[int], assigned_by: int, expires_at: Optional[datetime] = None) -> Dict[str, Any]:
+        """批量分配角色给用户"""
         # 检查用户是否存在
         user_result = await self.db.execute(
-            select(User).where(User.id == user_role_data.user_id)
+            select(User).where(User.id == user_id)
         )
         user = user_result.scalar_one_or_none()
         if not user:
-            raise_not_found("User", user_role_data.user_id)
+            raise_not_found("User", user_id)
         
-        # 检查角色是否存在
-        role = await self.get_role_by_id(user_role_data.role_id)
-        if not role:
-            raise_not_found("Role", user_role_data.role_id)
+        results = {
+            "success_count": 0,
+            "failed_count": 0,
+            "errors": [],
+            "assigned_roles": []
+        }
         
-        # 检查是否已分配该角色
-        existing_assignment = await self.db.execute(
+        try:
+            for role_id in role_ids:
+                try:
+                    # 检查角色是否存在
+                    role = await self.get_role_by_id(role_id)
+                    if not role:
+                        results["failed_count"] += 1
+                        results["errors"].append({
+                            "role_id": role_id,
+                            "error": f"角色 {role_id} 不存在"
+                        })
+                        continue
+                    
+                    # 检查是否已经分配了该角色
+                    existing = await self.db.execute(
+                        select(UserRole).where(
+                            and_(
+                                UserRole.user_id == user_id,
+                                UserRole.role_id == role_id
+                            )
+                        )
+                    )
+                    
+                    if existing.scalar_one_or_none():
+                        results["failed_count"] += 1
+                        results["errors"].append({
+                            "role_id": role_id,
+                            "error": f"用户已经拥有角色 '{role.name}'"
+                        })
+                        continue
+                    
+                    # 创建用户角色关联
+                    user_role = UserRole(
+                        user_id=user_id,
+                        role_id=role_id,
+                        assigned_by=assigned_by,
+                        assigned_at=datetime.utcnow(),
+                        expires_at=expires_at
+                    )
+                    
+                    self.db.add(user_role)
+                    results["success_count"] += 1
+                    results["assigned_roles"].append({
+                        "role_id": role_id,
+                        "role_name": role.name
+                    })
+                    
+                    logger.info(f"Role {role.name} assigned to user {user.username} by user {assigned_by}")
+                    
+                except Exception as e:
+                    results["failed_count"] += 1
+                    results["errors"].append({
+                        "role_id": role_id,
+                        "error": str(e)
+                    })
+            
+            await self.db.commit()
+            
+            logger.info(
+                f"Batch role assignment completed for user {user.username}: "
+                f"{results['success_count']} success, {results['failed_count']} failed"
+            )
+            
+            return results
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Batch role assignment failed for user {user_id}: {str(e)}")
+            raise_business_error("批量分配角色失败")
+    
+    async def assign_role_to_user(self, user_role_data: UserRoleCreate) -> UserRole:
+        """为用户分配单个角色（保持向后兼容）"""
+        result = await self.assign_roles_to_user(
+            user_role_data.user_id, 
+            [user_role_data.role_id], 
+            user_role_data.assigned_by, 
+            user_role_data.expires_at
+        )
+        
+        if result["failed_count"] > 0:
+            error_msg = result["errors"][0]["error"]
+            if "已经拥有角色" in error_msg:
+                from ..core.exceptions import DuplicateResourceException
+                raise DuplicateResourceException(error_msg)
+            else:
+                raise_business_error(error_msg)
+        
+        # 返回创建的用户角色关联
+        user_role_result = await self.db.execute(
             select(UserRole).where(
                 and_(
                     UserRole.user_id == user_role_data.user_id,
@@ -439,59 +528,103 @@ class RoleService:
                 )
             )
         )
-        if existing_assignment.scalar_one_or_none():
-            raise_duplicate("UserRole", "user_role", f"{user_role_data.user_id}-{user_role_data.role_id}")
         
-        # 创建用户角色关联
-        user_role_dict = user_role_data.dict()
-        user_role = UserRole(**user_role_dict)
+        return user_role_result.scalar_one()
+    
+    async def remove_roles_from_user(self, user_id: int, role_ids: List[int]) -> Dict[str, Any]:
+        """批量移除用户角色"""
+        # 检查用户是否存在
+        user_result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            raise_not_found("User", user_id)
+        
+        results = {
+            "success_count": 0,
+            "failed_count": 0,
+            "errors": [],
+            "removed_roles": []
+        }
         
         try:
-            self.db.add(user_role)
-            await self.db.commit()
-            await self.db.refresh(user_role)
+            for role_id in role_ids:
+                try:
+                    # 检查用户角色关联是否存在
+                    user_role_result = await self.db.execute(
+                        select(UserRole).where(
+                            and_(
+                                UserRole.user_id == user_id,
+                                UserRole.role_id == role_id
+                            )
+                        )
+                    )
+                    user_role = user_role_result.scalar_one_or_none()
+                    
+                    if not user_role:
+                        results["failed_count"] += 1
+                        results["errors"].append({
+                            "role_id": role_id,
+                            "error": f"用户未拥有角色 {role_id}"
+                        })
+                        continue
+                    
+                    # 获取角色信息用于日志
+                    role = await self.get_role_by_id(role_id)
+                    role_name = role.name if role else str(role_id)
+                    
+                    # 删除用户角色关联
+                    await self.db.execute(
+                        delete(UserRole).where(
+                            and_(
+                                UserRole.user_id == user_id,
+                                UserRole.role_id == role_id
+                            )
+                        )
+                    )
+                    
+                    results["success_count"] += 1
+                    results["removed_roles"].append({
+                        "role_id": role_id,
+                        "role_name": role_name
+                    })
+                    
+                    logger.info(f"Role {role_name} removed from user {user.username}")
+                    
+                except Exception as e:
+                    results["failed_count"] += 1
+                    results["errors"].append({
+                        "role_id": role_id,
+                        "error": str(e)
+                    })
             
-            logger.info(f"Role '{role.name}' assigned to user '{user.username}' (ID: {user.id})")
-            return user_role
+            await self.db.commit()
+            
+            logger.info(
+                f"Batch role removal completed for user {user.username}: "
+                f"{results['success_count']} success, {results['failed_count']} failed"
+            )
+            
+            return results
             
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"Failed to assign role: {str(e)}")
-            raise_business_error("Failed to assign role")
+            logger.error(f"Batch role removal failed for user {user_id}: {str(e)}")
+            raise_business_error("批量移除角色失败")
     
     async def remove_role_from_user(self, user_id: int, role_id: int) -> bool:
-        """移除用户角色"""
-        user_role_result = await self.db.execute(
-            select(UserRole).where(
-                and_(
-                    UserRole.user_id == user_id,
-                    UserRole.role_id == role_id
-                )
-            )
-        )
-        user_role = user_role_result.scalar_one_or_none()
+        """移除用户单个角色（保持向后兼容）"""
+        result = await self.remove_roles_from_user(user_id, [role_id])
         
-        if not user_role:
-            raise_not_found("UserRole", f"{user_id}-{role_id}")
+        if result["failed_count"] > 0:
+            error_msg = result["errors"][0]["error"]
+            if "未拥有角色" in error_msg:
+                raise_not_found("UserRole", f"{user_id}-{role_id}")
+            else:
+                raise_business_error(error_msg)
         
-        try:
-            await self.db.execute(
-                delete(UserRole).where(
-                    and_(
-                        UserRole.user_id == user_id,
-                        UserRole.role_id == role_id
-                    )
-                )
-            )
-            await self.db.commit()
-            
-            logger.info(f"Role removed from user: user_id={user_id}, role_id={role_id}")
-            return True
-            
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"Failed to remove role: {str(e)}")
-            raise_business_error("Failed to remove role")
+        return result["success_count"] > 0
     
     async def batch_assign_roles(self, assignment: RoleAssignmentBatch) -> Dict[str, Any]:
         """批量分配角色"""

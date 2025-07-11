@@ -10,11 +10,11 @@ from app.models.user import User
 from app.core.exceptions import (
     raise_business_error, raise_not_found_resource, raise_server_error, BaseCustomException
 )
-from app.schemas.role import (
+from ...schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
-    UserRoleAssignment, UserRoleCreate, UserRoleBatchOperation, RoleSearchQuery,
-    PermissionSearchQuery, RoleStatistics
+    UserRoleAssignment, UserRoleRemoval, UserRoleBatchOperation, RoleAssignmentBatch,
+    RoleSearchQuery, PermissionSearchQuery, RoleStatistics
 )
 from app.services.role import RoleService
 
@@ -31,7 +31,7 @@ async def create_role(
 ):
     """创建新角色"""
     from app.core.exceptions import BaseCustomException
-    
+
     try:
         role_service = RoleService(db)
         role = await role_service.create_role(role_data)
@@ -88,7 +88,7 @@ async def update_role(
 ):
     """更新角色信息"""
     from app.core.exceptions import BaseCustomException
-    
+
     try:
         role_service = RoleService(db)
         updated_role = await role_service.update_role(role_id, role_data)
@@ -165,24 +165,26 @@ async def get_roles(
 
         role_service = RoleService(db)
         roles, total = await role_service.get_roles(page, size, search_query)
-        
+
         # 批量获取用户数量统计，避免N+1查询问题
         role_ids = [role.id for role in roles]
         user_counts = {}
-        
+
         if role_ids:
             from sqlalchemy import select, func
             from app.models.role import UserRole
-            
+
             # 批量查询每个角色的用户数量
             user_count_query = (
-                select(UserRole.role_id, func.count(UserRole.user_id).label('user_count'))
+                select(UserRole.role_id, func.count(
+                    UserRole.user_id).label('user_count'))
                 .where(UserRole.role_id.in_(role_ids))
                 .group_by(UserRole.role_id)
             )
             user_count_result = await db.execute(user_count_query)
-            user_counts = {row.role_id: row.user_count for row in user_count_result}
-        
+            user_counts = {
+                row.role_id: row.user_count for row in user_count_result}
+
         # 转换为响应模型
         role_list = []
         for role in roles:
@@ -195,7 +197,7 @@ async def get_roles(
                     permission_count = len(role.permissions['permissions'])
                 elif isinstance(role.permissions, list):
                     permission_count = len(role.permissions)
-            
+
             role_data = {
                 "id": role.id,
                 "name": role.name,
@@ -207,7 +209,7 @@ async def get_roles(
                 "created_at": role.created_at.isoformat() if role.created_at else None
             }
             role_list.append(role_data)
-        
+
         return ResponseBuilder.paginated(
             data=role_list,
             total=total,
@@ -393,7 +395,7 @@ async def get_permissions(
         # 处理 Pydantic 验证错误，提供更友好的错误信息
         error_msg = str(e)
         logger.warning(f"Permission query validation error: {error_msg}")
-        
+
         # 解析并转换为更友好的中文错误信息
         if "操作类型必须是以下值之一" in error_msg:
             friendly_msg = "操作类型参数无效，请使用以下值之一：create（创建）、read（查看）、update（更新）、delete（删除）、assign（分配）、execute（执行）"
@@ -413,7 +415,7 @@ async def get_permissions(
                 friendly_msg = "请求参数格式错误，请检查参数类型和取值范围"
         else:
             friendly_msg = "请求参数验证失败，请检查参数格式和取值是否正确"
-        
+
         raise_business_error(friendly_msg, 1001)
     except Exception as e:
         logger.error(f"Failed to get permissions: {str(e)}")
@@ -422,62 +424,99 @@ async def get_permissions(
 
 # ==================== 用户角色分配 ====================
 
-@router.post("/user/assign", summary="分配角色给用户")
-async def assign_role_to_user(
+@router.post("/user/assign", summary="批量分配角色给用户")
+async def assign_roles_to_user(
     assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:assign"))
 ):
-    """为用户分配角色"""
+    """批量为用户分配角色"""
     try:
         role_service = RoleService(db)
-        # 创建 UserRoleCreate 对象
-        user_role_data = UserRoleCreate(
+        result = await role_service.assign_roles_to_user(
             user_id=assignment.user_id,
-            role_id=assignment.role_id
+            role_ids=assignment.role_ids,
+            assigned_by=current_user.id,
+            expires_at=getattr(assignment, 'expires_at', None)
         )
-        user_role = await role_service.assign_role_to_user(user_role_data)
 
         log_security_event(
-            "role_assigned",
+            "roles_assigned",
             user_id=current_user.id,
-            details=f"target_user_id: {assignment.user_id}, role_id: {assignment.role_id}"
+            details=f"target_user_id: {assignment.user_id}, role_ids: {assignment.role_ids}, success: {result['success_count']}, failed: {result['failed_count']}"
         )
 
         return ResponseBuilder.success(
-            message="角色分配成功"
+            data=result,
+            message=f"批量分配角色完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
         )
     except BaseCustomException:
         # 让自定义异常传播到全局异常处理器，这样可以返回精确的错误信息
         raise
     except Exception as e:
-        logger.error(f"Failed to assign role: {str(e)}")
-        raise_business_error("分配角色失败", 1000)
+        logger.error(f"Failed to assign roles: {str(e)}")
+        raise_business_error("批量分配角色失败", 1000)
 
 
 @router.delete("/user/unassign", summary="移除用户角色")
 async def remove_role_from_user(
-    assignment: UserRoleAssignment,
+    assignment: UserRoleRemoval,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:assign"))
 ):
     """移除用户的角色"""
     try:
         role_service = RoleService(db)
-        await role_service.remove_role_from_user(assignment.user_id, assignment.role_id)
+        result = await role_service.remove_roles_from_user(
+            user_id=assignment.user_id,
+            role_ids=assignment.role_ids
+        )
 
         log_security_event(
-            "role_removed",
+            "roles_removed",
             user_id=current_user.id,
-            details=f"target_user_id: {assignment.user_id}, role_id: {assignment.role_id}"
+            details=f"target_user_id: {assignment.user_id}, role_ids: {assignment.role_ids}, success: {result['success_count']}, failed: {result['failed_count']}"
         )
 
         return ResponseBuilder.success(
-            message="角色移除成功"
+            data=result,
+            message=f"角色移除完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
         )
     except Exception as e:
         logger.error(f"Failed to remove role: {str(e)}")
         raise_business_error("移除角色失败", 1000)
+
+
+@router.delete("/user/remove", summary="批量移除用户角色")
+async def remove_roles_from_user(
+    removal: UserRoleRemoval,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("role:assign"))
+):
+    """批量移除用户角色"""
+    try:
+        role_service = RoleService(db)
+        result = await role_service.remove_roles_from_user(
+            user_id=removal.user_id,
+            role_ids=removal.role_ids
+        )
+
+        log_security_event(
+            "roles_removed",
+            user_id=current_user.id,
+            details=f"target_user_id: {removal.user_id}, role_ids: {removal.role_ids}, success: {result['success_count']}, failed: {result['failed_count']}"
+        )
+
+        return ResponseBuilder.success(
+            data=result,
+            message=f"批量移除角色完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
+        )
+
+    except BaseCustomException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove roles: {str(e)}")
+        raise_business_error("批量移除角色失败", 1001)
 
 
 @router.post("/user/batch-assign", summary="批量分配角色")
