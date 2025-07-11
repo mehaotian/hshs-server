@@ -114,8 +114,33 @@ async def get_role(
         if not role:
             raise_not_found_resource("角色")
 
+        # 在数据库会话仍然活跃时获取角色数据，避免访问关系属性
+        role_data = {
+            'id': role.id,
+            'name': role.name,
+            'display_name': role.display_name,
+            'description': role.description,
+            'permissions': [],  # 暂时返回空数组，避免关系查询
+            'is_system': bool(role.is_system),
+            'is_active': bool(role.is_active),
+            'sort_order': role.sort_order,
+            'created_at': role.created_at.isoformat() if role.created_at else None,
+            'updated_at': role.updated_at.isoformat() if role.updated_at else None,
+        }
+        
+        # 手动查询权限信息
+        from sqlalchemy import select
+        from app.models.role import RolePermission, Permission
+        permission_query = (
+            select(Permission.name)
+            .join(RolePermission, Permission.id == RolePermission.permission_id)
+            .where(RolePermission.role_id == role.id)
+        )
+        permission_result = await db.execute(permission_query)
+        role_data['permissions'] = [name for name, in permission_result.fetchall()]
+
         return ResponseBuilder.success(
-            data=role.to_dict(),
+            data=role_data,
             message="获取角色信息成功"
         )
     except BaseCustomException:
@@ -145,8 +170,33 @@ async def update_role(
             details=f"role_id: {role_id}, updated_fields: {list(role_data.dict(exclude_unset=True).keys())}"
         )
 
+        # 在数据库会话仍然活跃时获取角色数据，避免访问关系属性
+        role_data = {
+            'id': updated_role.id,
+            'name': updated_role.name,
+            'display_name': updated_role.display_name,
+            'description': updated_role.description,
+            'permissions': [],  # 暂时返回空数组，避免关系查询
+            'is_system': bool(updated_role.is_system),
+            'is_active': bool(updated_role.is_active),
+            'sort_order': updated_role.sort_order,
+            'created_at': updated_role.created_at.isoformat() if updated_role.created_at else None,
+            'updated_at': updated_role.updated_at.isoformat() if updated_role.updated_at else None,
+        }
+        
+        # 手动查询权限信息
+        from sqlalchemy import select
+        from app.models.role import RolePermission, Permission
+        permission_query = (
+            select(Permission.name)
+            .join(RolePermission, Permission.id == RolePermission.permission_id)
+            .where(RolePermission.role_id == updated_role.id)
+        )
+        permission_result = await db.execute(permission_query)
+        role_data['permissions'] = [name for name, in permission_result.fetchall()]
+
         return ResponseBuilder.success(
-            data=updated_role.to_dict(),
+            data=role_data,
             message="角色信息更新成功"
         )
     except BaseCustomException:
@@ -306,8 +356,23 @@ async def create_permission(
             details=f"permission_name: {permission.name}, permission_id: {permission.id}"
         )
 
+        # 手动构建权限数据，避免关系查询
+        permission_data = {
+            'id': permission.id,
+            'name': permission.name,
+            'display_name': permission.display_name,
+            'description': permission.description,
+            'module': permission.module,
+            'action': permission.action,
+            'resource': permission.resource,
+            'is_system': bool(permission.is_system),
+            'sort_order': permission.sort_order,
+            'created_at': permission.created_at.isoformat() if permission.created_at else None,
+            'updated_at': permission.updated_at.isoformat() if permission.updated_at else None,
+        }
+
         return ResponseBuilder.success(
-            data=permission.to_dict(),
+            data=permission_data,
             message="权限创建成功"
         )
     except BaseCustomException:
@@ -332,8 +397,23 @@ async def get_permission(
         if not permission:
             raise_not_found_resource("权限")
 
+        # 手动构建权限数据，避免关系查询
+        permission_data = {
+            'id': permission.id,
+            'name': permission.name,
+            'display_name': permission.display_name,
+            'description': permission.description,
+            'module': permission.module,
+            'action': permission.action,
+            'resource': permission.resource,
+            'is_system': bool(permission.is_system),
+            'sort_order': permission.sort_order,
+            'created_at': permission.created_at.isoformat() if permission.created_at else None,
+            'updated_at': permission.updated_at.isoformat() if permission.updated_at else None,
+        }
+
         return ResponseBuilder.success(
-            data=permission.to_dict(),
+            data=permission_data,
             message="获取权限信息成功"
         )
     except BaseCustomException:
@@ -361,8 +441,23 @@ async def update_permission(
             details=f"permission_id: {permission_id}, updated_fields: {list(permission_data.dict(exclude_unset=True).keys())}"
         )
 
+        # 手动构建权限数据，避免关系查询
+        permission_data = {
+            'id': updated_permission.id,
+            'name': updated_permission.name,
+            'display_name': updated_permission.display_name,
+            'description': updated_permission.description,
+            'module': updated_permission.module,
+            'action': updated_permission.action,
+            'resource': updated_permission.resource,
+            'is_system': bool(updated_permission.is_system),
+            'sort_order': updated_permission.sort_order,
+            'created_at': updated_permission.created_at.isoformat() if updated_permission.created_at else None,
+            'updated_at': updated_permission.updated_at.isoformat() if updated_permission.updated_at else None,
+        }
+
         return ResponseBuilder.success(
-            data=updated_permission.to_dict(),
+            data=permission_data,
             message="权限信息更新成功"
         )
     except Exception as e:
@@ -427,8 +522,23 @@ async def get_permissions(
         role_service = RoleService(db)
         permissions, total = await role_service.get_permissions(page, size, search_query)
 
-        # 将Permission对象转换为字典格式
-        permissions_data = [permission.to_dict() for permission in permissions]
+        # 手动构建权限数据列表，避免关系查询
+        permissions_data = []
+        for permission in permissions:
+            permission_data = {
+                'id': permission.id,
+                'name': permission.name,
+                'display_name': permission.display_name,
+                'description': permission.description,
+                'module': permission.module,
+                'action': permission.action,
+                'resource': permission.resource,
+                'is_system': bool(permission.is_system),
+                'sort_order': permission.sort_order,
+                'created_at': permission.created_at.isoformat() if permission.created_at else None,
+                'updated_at': permission.updated_at.isoformat() if permission.updated_at else None,
+            }
+            permissions_data.append(permission_data)
 
         return ResponseBuilder.paginated(
             data=permissions_data,

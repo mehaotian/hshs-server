@@ -125,15 +125,49 @@ class RoleService:
             if existing_role:
                 raise_duplicate("Role", "name", role_data.name)
         
-        # 更新角色信息
+        # 更新角色信息，排除 permission_ids 字段
         update_data = role_data.dict(exclude_unset=True)
+        permission_ids = update_data.pop('permission_ids', None)  # 提取权限ID列表
         
         try:
-            await self.db.execute(
-                update(Role)
-                .where(Role.id == role_id)
-                .values(**update_data)
-            )
+            # 更新角色基本信息
+            if update_data:  # 只有在有其他字段需要更新时才执行
+                await self.db.execute(
+                    update(Role)
+                    .where(Role.id == role_id)
+                    .values(**update_data)
+                )
+            
+            # 处理权限更新
+            if permission_ids is not None:
+                # 删除现有的角色权限关联
+                await self.db.execute(
+                    delete(RolePermission).where(RolePermission.role_id == role_id)
+                )
+                
+                # 添加新的权限关联
+                if permission_ids:
+                    # 验证权限ID是否存在
+                    permission_check = await self.db.execute(
+                        select(func.count(Permission.id))
+                        .where(Permission.id.in_(permission_ids))
+                    )
+                    valid_count = permission_check.scalar()
+                    
+                    if valid_count != len(permission_ids):
+                        raise_validation_error("Some permission IDs are invalid")
+                    
+                    # 批量插入角色权限关联
+                    role_permissions = [
+                        {"role_id": role_id, "permission_id": pid}
+                        for pid in permission_ids
+                    ]
+                    await self.db.execute(
+                        insert(RolePermission).values(role_permissions)
+                    )
+                
+                # 权限信息通过 RolePermission 关系表管理，无需更新 Role 表的 permissions 字段
+            
             await self.db.commit()
             
             # 重新获取更新后的角色
