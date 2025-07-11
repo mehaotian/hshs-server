@@ -43,7 +43,7 @@ class WildcardPermissionAdder:
                 'module': 'system',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 0
             },
@@ -54,7 +54,7 @@ class WildcardPermissionAdder:
                 'module': 'user',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.USER,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 10
             },
@@ -65,7 +65,7 @@ class WildcardPermissionAdder:
                 'module': 'role',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.ROLE,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 20
             },
@@ -76,7 +76,7 @@ class WildcardPermissionAdder:
                 'module': 'script',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SCRIPT,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 30
             },
@@ -87,7 +87,7 @@ class WildcardPermissionAdder:
                 'module': 'audio',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.AUDIO,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 40
             },
@@ -98,7 +98,7 @@ class WildcardPermissionAdder:
                 'module': 'review',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.REVIEW,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 50
             },
@@ -109,7 +109,7 @@ class WildcardPermissionAdder:
                 'module': 'society',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SOCIETY,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 60
             },
@@ -120,7 +120,7 @@ class WildcardPermissionAdder:
                 'module': 'system',
                 'action': PermissionType.READ,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 100
             },
@@ -131,7 +131,7 @@ class WildcardPermissionAdder:
                 'module': 'system',
                 'action': PermissionType.WRITE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 110
             },
@@ -142,7 +142,7 @@ class WildcardPermissionAdder:
                 'module': 'system',
                 'action': PermissionType.DELETE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 120
             },
@@ -153,7 +153,7 @@ class WildcardPermissionAdder:
                 'module': 'system',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': True,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_active': True,
                 'sort_order': 130
             }
@@ -187,8 +187,9 @@ class WildcardPermissionAdder:
         """列出所有通配符权限"""
         self.log("查询通配符权限...")
         
+        # 查询包含通配符的权限（权限名称中包含 '*'）
         result = await self.db.execute(
-            select(Permission).where(Permission.is_wildcard == True).order_by(Permission.sort_order)
+            select(Permission).where(Permission.name.contains('*')).order_by(Permission.sort_order)
         )
         permissions = result.scalars().all()
         

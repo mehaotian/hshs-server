@@ -33,8 +33,13 @@ class PermissionBase(BaseModel):
     module: str = Field(..., max_length=50, description="所属模块")
     action: PermissionType = Field(..., description="操作类型")
     resource: ResourceType = Field(..., description="资源类型")
-    is_wildcard: bool = Field(False, description="是否通配符权限")
+    # is_wildcard 字段已移除，现在通过权限名称自动判断
     sort_order: int = Field(0, description="排序顺序")
+    
+    @property
+    def is_wildcard(self) -> bool:
+        """判断是否为通配符权限"""
+        return '*' in (self.name or '')
 
     @validator('name')
     def validate_name(cls, v):
@@ -58,9 +63,14 @@ class PermissionUpdate(BaseModel):
     module: Optional[str] = Field(None, max_length=50, description="所属模块")
     action: Optional[PermissionType] = Field(None, description="操作类型")
     resource: Optional[ResourceType] = Field(None, description="资源类型")
-    is_wildcard: Optional[bool] = Field(None, description="是否通配符权限")
+    # is_wildcard 字段已移除，现在通过权限名称自动判断
     is_active: Optional[bool] = Field(None, description="是否激活")
     sort_order: Optional[int] = Field(None, description="排序顺序")
+    
+    @property
+    def is_wildcard(self) -> bool:
+        """判断是否为通配符权限"""
+        return '*' in (self.name or '') if self.name else False
 
     @validator('name')
     def validate_name(cls, v):

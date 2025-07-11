@@ -170,7 +170,7 @@ class Permission(Base):
     action = Column(String(50), nullable=True, comment="操作类型")
     resource = Column(String(50), nullable=True, comment="资源类型")
     is_system = Column(Integer, default=0, comment="是否系统权限")
-    is_wildcard = Column(Integer, default=0, comment="是否通配符权限：1-是，0-否")
+    # is_wildcard 字段已移除，现在通过权限名称自动判断
     is_active = Column(Integer, default=1, comment="是否激活：1-是，0-否")
     sort_order = Column(Integer, default=0, comment="排序顺序")
     
@@ -183,6 +183,11 @@ class Permission(Base):
     def __repr__(self) -> str:
         return f"<Permission(id={self.id}, name='{self.name}')>"
     
+    @property
+    def is_wildcard(self) -> bool:
+        """判断是否为通配符权限"""
+        return '*' in (self.name or '')
+    
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
         return {
@@ -194,7 +199,7 @@ class Permission(Base):
             'action': self.action,
             'resource': self.resource,
             'is_system': bool(self.is_system),
-            'is_wildcard': bool(self.is_wildcard),
+            'is_wildcard': self.is_wildcard,
             'is_active': bool(self.is_active),
             'sort_order': self.sort_order,
             'created_at': self.created_at.isoformat() if self.created_at else None,

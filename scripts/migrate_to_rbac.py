@@ -88,7 +88,7 @@ class RBACMigrator:
                 'module': 'system',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 0
             },
@@ -99,7 +99,7 @@ class RBACMigrator:
                 'module': 'user',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.USER,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 10
             },
@@ -110,7 +110,7 @@ class RBACMigrator:
                 'module': 'role',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.ROLE,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 20
             },
@@ -121,7 +121,7 @@ class RBACMigrator:
                 'module': 'script',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SCRIPT,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 30
             },
@@ -132,7 +132,7 @@ class RBACMigrator:
                 'module': 'audio',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.AUDIO,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 40
             },
@@ -143,7 +143,7 @@ class RBACMigrator:
                 'module': 'review',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.REVIEW,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 50
             },
@@ -154,7 +154,7 @@ class RBACMigrator:
                 'module': 'society',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SOCIETY,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 60
             },
@@ -165,7 +165,7 @@ class RBACMigrator:
                 'module': 'system',
                 'action': PermissionType.READ,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 100
             },
@@ -176,7 +176,7 @@ class RBACMigrator:
                 'module': 'system',
                 'action': PermissionType.WRITE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 110
             },
@@ -187,7 +187,7 @@ class RBACMigrator:
                 'module': 'system',
                 'action': PermissionType.DELETE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 120
             },
@@ -198,7 +198,7 @@ class RBACMigrator:
                 'module': 'system',
                 'action': PermissionType.MANAGE,
                 'resource': ResourceType.SYSTEM,
-                'is_wildcard': 1,
+                # is_wildcard 现在通过权限名称自动判断
                 'is_system': 1,
                 'sort_order': 130
             }
@@ -330,7 +330,7 @@ class RBACMigrator:
         
         # 检查权限数据
         result = await self.db.execute(
-            text("SELECT COUNT(*) FROM permissions WHERE is_wildcard = 1")
+            text("SELECT COUNT(*) FROM permissions WHERE name LIKE '%*%'")
         )
         wildcard_perms = result.scalar()
         
@@ -420,7 +420,7 @@ class RBACMigrator:
             
             # 删除通配符权限
             await self.db.execute(
-                text("DELETE FROM permissions WHERE is_wildcard = 1")
+                text("DELETE FROM permissions WHERE name LIKE '%*%'")
             )
             
             # 移除is_wildcard字段
