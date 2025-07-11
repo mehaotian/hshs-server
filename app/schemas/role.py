@@ -43,8 +43,8 @@ class PermissionBase(BaseModel):
 
     @validator('name')
     def validate_name(cls, v):
-        if not v.replace('_', '').replace(':', '').isalnum():
-            raise ValueError('权限名称只能包含字母、数字、下划线和冒号')
+        if not v.replace('_', '').replace(':', '').replace('*', '').isalnum():
+            raise ValueError('权限名称只能包含字母、数字、下划线、冒号和星号')
         return v
 
 
@@ -74,8 +74,8 @@ class PermissionUpdate(BaseModel):
 
     @validator('name')
     def validate_name(cls, v):
-        if v and not v.replace('_', '').replace(':', '').isalnum():
-            raise ValueError('权限名称只能包含字母、数字、下划线和冒号')
+        if v and not v.replace('_', '').replace(':', '').replace('*', '').isalnum():
+            raise ValueError('权限名称只能包含字母、数字、下划线、冒号和星号')
         return v
 
 
