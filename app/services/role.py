@@ -37,10 +37,18 @@ class RoleService:
         
         # 验证权限ID是否存在（如果提供了permission_ids）
         if role_data.permission_ids:
-            for permission_id in role_data.permission_ids:
-                permission = await self.get_permission_by_id(permission_id)
-                if not permission:
-                    raise_validation_error(f"权限ID {permission_id} 不存在")
+            # 批量验证权限ID，获取有效的权限ID列表
+            valid_permissions_result = await self.db.execute(
+                select(Permission.id)
+                .where(Permission.id.in_(role_data.permission_ids))
+            )
+            valid_permission_ids = {row[0] for row in valid_permissions_result.fetchall()}
+            
+            # 检查是否有无效的权限ID
+            invalid_permission_ids = set(role_data.permission_ids) - valid_permission_ids
+            if invalid_permission_ids:
+                invalid_ids_str = ", ".join(map(str, sorted(invalid_permission_ids)))
+                raise_validation_error(f"无效的权限ID: {invalid_ids_str}。请检查这些权限ID是否存在。")
         
         # 创建角色（排除permission_ids字段）
         role_dict = role_data.dict(exclude={'permission_ids'})
@@ -147,15 +155,18 @@ class RoleService:
                 
                 # 添加新的权限关联
                 if permission_ids:
-                    # 验证权限ID是否存在
-                    permission_check = await self.db.execute(
-                        select(func.count(Permission.id))
+                    # 验证权限ID是否存在，获取有效的权限ID列表
+                    valid_permissions_result = await self.db.execute(
+                        select(Permission.id)
                         .where(Permission.id.in_(permission_ids))
                     )
-                    valid_count = permission_check.scalar()
+                    valid_permission_ids = {row[0] for row in valid_permissions_result.fetchall()}
                     
-                    if valid_count != len(permission_ids):
-                        raise_validation_error("Some permission IDs are invalid")
+                    # 检查是否有无效的权限ID
+                    invalid_permission_ids = set(permission_ids) - valid_permission_ids
+                    if invalid_permission_ids:
+                        invalid_ids_str = ", ".join(map(str, sorted(invalid_permission_ids)))
+                        raise_validation_error(f"无效的权限ID: {invalid_ids_str}。请检查这些权限ID是否存在。")
                     
                     # 批量插入角色权限关联
                     role_permissions = [
@@ -179,6 +190,17 @@ class RoleService:
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Failed to update role {role_id}: {str(e)}")
+            
+            # 检查是否是验证错误，如果是则重新抛出以保持错误信息
+            error_msg = str(e)
+            if "无效的权限ID" in error_msg:
+                # 重新抛出验证错误以保持详细的错误信息
+                raise e
+            elif "constraint" in error_msg.lower() or "unique" in error_msg.lower():
+                raise_validation_error("数据约束违反")
+            elif "foreign key" in error_msg.lower():
+                raise_validation_error("外键约束违反")
+            
             raise_business_error("Failed to update role")
     
     async def delete_role(self, role_id: int) -> bool:
