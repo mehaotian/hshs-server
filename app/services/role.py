@@ -912,11 +912,11 @@ class RoleService:
         return users, total
     
     async def check_user_permission(self, user_id: int, permission_name: str) -> bool:
-        """检查用户是否有指定权限"""
+        """检查用户是否有指定权限（支持通配符匹配）"""
         # 获取用户角色
         user_roles = await self.get_user_roles(user_id)
         
-        # 检查每个角色的权限
+        # 检查每个角色的权限（现在支持通配符匹配）
         for role in user_roles:
             if role.has_permission(permission_name):
                 return True
@@ -924,7 +924,7 @@ class RoleService:
         return False
     
     async def get_user_permissions(self, user_id: int) -> List[str]:
-        """获取用户的所有权限"""
+        """获取用户的所有权限（包括通配符权限）"""
         from ..models.user import User
         from sqlalchemy import select
         
@@ -938,8 +938,25 @@ class RoleService:
             from ..core.exceptions import raise_not_found
             raise_not_found("User", user_id)
         
-        # 获取用户权限
+        # 获取用户权限（包括通配符权限）
         return await user.get_permissions(self.db)
+    
+    async def get_user_expanded_permissions(self, user_id: int) -> List[str]:
+        """获取用户的展开权限列表（将通配符权限展开为具体权限）"""
+        from ..models.user import User
+        from sqlalchemy import select
+        
+        # 获取用户
+        result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise_not_found("User", user_id)
+        
+        # 获取用户展开权限
+        return await user.get_expanded_permissions(self.db)
     
     async def get_role_statistics(self) -> Dict[str, Any]:
         """获取角色统计信息"""

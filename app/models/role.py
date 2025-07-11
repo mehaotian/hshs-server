@@ -42,8 +42,32 @@ class Role(Base):
             return []
     
     def has_permission(self, permission: str) -> bool:
-        """检查角色是否拥有指定权限"""
-        return permission in self.permission_list
+        """检查角色是否拥有指定权限（支持通配符匹配）"""
+        permissions = self.permission_list
+        
+        # 1. 检查超级权限 *:* 或 *
+        if '*:*' in permissions or '*' in permissions:
+            return True
+        
+        # 2. 精确匹配
+        if permission in permissions:
+            return True
+        
+        # 3. 通配符匹配
+        if ':' in permission:
+            module, action = permission.split(':', 1)
+            
+            # 检查模块通配符 module:*
+            module_wildcard = f"{module}:*"
+            if module_wildcard in permissions:
+                return True
+            
+            # 检查操作通配符 *:action
+            action_wildcard = f"*:{action}"
+            if action_wildcard in permissions:
+                return True
+        
+        return False
     
     def add_permission(self, permission: str) -> None:
         """添加权限"""

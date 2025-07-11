@@ -122,9 +122,64 @@ class User(Base):
         return list(permissions)
     
     async def has_permission(self, permission: str, db=None) -> bool:
-        """检查用户是否拥有指定权限"""
-        permissions = await self.get_permissions(db)
-        return permission in permissions
+        """检查用户是否拥有指定权限（支持通配符匹配）"""
+        if db is None:
+            # 如果没有传入db会话，尝试从已加载的关系中获取
+            try:
+                for user_role in self.user_roles:
+                    if user_role.role and user_role.role.has_permission(permission):
+                        return True
+                return False
+            except Exception as e:
+                print(f"Error checking permission: {e}")
+                return False
+        
+        # 使用数据库会话查询角色并检查权限
+        from sqlalchemy import select
+        from app.models.role import UserRole, Role
+        
+        result = await db.execute(
+            select(Role)
+            .join(UserRole, Role.id == UserRole.role_id)
+            .where(UserRole.user_id == self.id)
+        )
+        
+        roles = result.scalars().all()
+        for role in roles:
+            if role.has_permission(permission):
+                return True
+        
+        return False
+    
+    async def get_expanded_permissions(self, db=None) -> List[str]:
+        """获取用户的展开权限列表（将通配符权限展开为具体权限）"""
+        from app.models.role import SYSTEM_PERMISSIONS
+        
+        # 获取用户的原始权限列表
+        raw_permissions = await self.get_permissions(db)
+        expanded_permissions = set()
+        
+        for permission in raw_permissions:
+            if permission == '*' or permission == '*:*':
+                # 超级权限，添加所有系统权限
+                expanded_permissions.update(SYSTEM_PERMISSIONS.keys())
+            elif permission.endswith(':*'):
+                # 模块通配符权限，添加该模块的所有权限
+                module = permission[:-2]  # 移除 ':*'
+                for sys_perm in SYSTEM_PERMISSIONS.keys():
+                    if sys_perm.startswith(f"{module}:"):
+                        expanded_permissions.add(sys_perm)
+            elif permission.startswith('*:'):
+                # 操作通配符权限，添加所有模块的该操作权限
+                action = permission[2:]  # 移除 '*:'
+                for sys_perm in SYSTEM_PERMISSIONS.keys():
+                    if sys_perm.endswith(f":{action}"):
+                        expanded_permissions.add(sys_perm)
+            else:
+                # 具体权限，直接添加
+                expanded_permissions.add(permission)
+        
+        return sorted(list(expanded_permissions))
     
     def update_login_info(self) -> None:
         """更新登录信息"""

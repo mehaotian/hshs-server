@@ -483,9 +483,17 @@ class UserService:
         return await user.get_roles(self.db)
     
     async def get_user_permissions(self, user_id: int) -> List[str]:
-        """获取用户权限"""
+        """获取用户权限（包括通配符权限）"""
         user = await self.get_user_by_id(user_id)
         if not user:
             raise_not_found("User", user_id)
         
         return await user.get_permissions(self.db)
+    
+    async def get_user_expanded_permissions(self, user_id: int) -> List[str]:
+        """获取用户展开权限列表（将通配符权限展开为具体权限）"""
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            raise_not_found("User", user_id)
+        
+        return await user.get_expanded_permissions(self.db)

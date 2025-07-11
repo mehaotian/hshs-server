@@ -444,7 +444,7 @@ async def get_current_user_permissions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """获取当前用户的所有权限"""
+    """获取当前用户的所有权限（包括通配符权限）"""
     try:
         user_service = UserService(db)
         permissions = await user_service.get_user_permissions(current_user.id)
@@ -456,6 +456,25 @@ async def get_current_user_permissions(
     except Exception as e:
         logger.error(f"Failed to get user permissions: {str(e)}")
         raise_business_error("获取用户权限失败", 1000)
+
+
+@router.get("/me/permissions/expanded", summary="获取当前用户展开权限")
+async def get_current_user_expanded_permissions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取当前用户的展开权限列表（将通配符权限展开为具体权限）"""
+    try:
+        user_service = UserService(db)
+        expanded_permissions = await user_service.get_user_expanded_permissions(current_user.id)
+        
+        return ResponseBuilder.success(
+            data=expanded_permissions,
+            message="获取用户展开权限成功"
+        )
+    except Exception as e:
+        logger.error(f"Failed to get user expanded permissions: {str(e)}")
+        raise_business_error("获取用户展开权限失败", 1000)
 
 
 @router.get("/roles/{user_id}", summary="获取指定用户角色")
@@ -484,7 +503,7 @@ async def get_user_permissions_by_id(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("user:read"))
 ):
-    """获取指定用户的所有权限"""
+    """获取指定用户的所有权限（包括通配符权限）"""
     try:
         user_service = UserService(db)
         permissions = await user_service.get_user_permissions(user_id)
@@ -496,3 +515,7 @@ async def get_user_permissions_by_id(
     except Exception as e:
         logger.error(f"Failed to get user permissions: {str(e)}")
         raise_business_error("获取用户权限失败", 1000)
+
+
+# 注意：获取指定用户展开权限的接口已移至 /api/v1/roles/user/permissions/{user_id}/expanded
+# 避免接口重复，此处不再提供该功能
