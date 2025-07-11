@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, func, and_, or_
+from sqlalchemy import select, update, delete, insert, func, and_, or_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 
@@ -626,45 +626,110 @@ class RoleService:
         
         return result["success_count"] > 0
     
-    async def batch_assign_roles(self, assignment: RoleAssignmentBatch) -> Dict[str, Any]:
-        """批量分配角色"""
+    async def batch_assign_roles_to_users(
+        self, 
+        user_ids: List[int], 
+        role_ids: List[int], 
+        assigned_by: int, 
+        expires_at: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """批量为多个用户分配角色 - 优化版本，避免嵌套循环"""
         results = {
             "success_count": 0,
             "failed_count": 0,
-            "errors": []
+            "success": [],
+            "failed": []
         }
         
         try:
-            for user_id in assignment.user_ids:
-                for role_id in assignment.role_ids:
-                    try:
-                        # 检查是否已分配
-                        existing = await self.db.execute(
-                            select(UserRole).where(
-                                and_(
-                                    UserRole.user_id == user_id,
-                                    UserRole.role_id == role_id
-                                )
-                            )
-                        )
-                        
-                        if not existing.scalar_one_or_none():
-                            user_role = UserRole(
-                                user_id=user_id,
-                                role_id=role_id,
-                                assigned_by=assignment.assigned_by,
-                                expires_at=assignment.expires_at
-                            )
-                            self.db.add(user_role)
-                            results["success_count"] += 1
-                        
-                    except Exception as e:
+            # 验证用户和角色是否存在
+            from ..models.user import User
+            
+            # 批量检查用户是否存在
+            user_check_result = await self.db.execute(
+                select(User.id).where(User.id.in_(user_ids))
+            )
+            existing_user_ids = set(user_check_result.scalars().all())
+            
+            # 批量检查角色是否存在
+            role_check_result = await self.db.execute(
+                select(Role.id).where(Role.id.in_(role_ids))
+            )
+            existing_role_ids = set(role_check_result.scalars().all())
+            
+            # 记录不存在的用户和角色
+            for user_id in user_ids:
+                if user_id not in existing_user_ids:
+                    for role_id in role_ids:
                         results["failed_count"] += 1
-                        results["errors"].append({
+                        results["failed"].append({
                             "user_id": user_id,
                             "role_id": role_id,
-                            "error": str(e)
+                            "error": "用户不存在"
                         })
+            
+            for role_id in role_ids:
+                if role_id not in existing_role_ids:
+                    for user_id in user_ids:
+                        if user_id in existing_user_ids:
+                            results["failed_count"] += 1
+                            results["failed"].append({
+                                "user_id": user_id,
+                                "role_id": role_id,
+                                "error": "角色不存在"
+                            })
+            
+            # 只处理存在的用户和角色
+            valid_user_ids = [uid for uid in user_ids if uid in existing_user_ids]
+            valid_role_ids = [rid for rid in role_ids if rid in existing_role_ids]
+            
+            if valid_user_ids and valid_role_ids:
+                # 批量查询现有的用户角色关联
+                existing_user_roles_result = await self.db.execute(
+                    select(UserRole.user_id, UserRole.role_id)
+                    .where(
+                        and_(
+                            UserRole.user_id.in_(valid_user_ids),
+                            UserRole.role_id.in_(valid_role_ids)
+                        )
+                    )
+                )
+                existing_user_roles = set(existing_user_roles_result.all())
+                
+                # 准备批量插入的数据
+                user_roles_to_create = []
+                current_time = datetime.utcnow()
+                
+                # 记录成功和失败的操作
+                for user_id in valid_user_ids:
+                    for role_id in valid_role_ids:
+                        if (user_id, role_id) in existing_user_roles:
+                            results["failed_count"] += 1
+                            results["failed"].append({
+                                "user_id": user_id,
+                                "role_id": role_id,
+                                "error": "角色已分配"
+                            })
+                        else:
+                            # 准备创建新的用户角色关联
+                            user_roles_to_create.append({
+                                "user_id": user_id,
+                                "role_id": role_id,
+                                "assigned_by": assigned_by,
+                                "assigned_at": current_time,
+                                "expires_at": expires_at
+                            })
+                            results["success_count"] += 1
+                            results["success"].append({
+                                "user_id": user_id,
+                                "role_id": role_id
+                            })
+                
+                # 批量插入用户角色关联
+                if user_roles_to_create:
+                    await self.db.execute(
+                        insert(UserRole).values(user_roles_to_create)
+                    )
             
             await self.db.commit()
             
@@ -678,7 +743,118 @@ class RoleService:
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Batch role assignment failed: {str(e)}")
-            raise_business_error("Batch role assignment failed")
+            raise_business_error("批量分配角色失败")
+    
+    async def batch_remove_roles_from_users(
+        self, 
+        user_ids: List[int], 
+        role_ids: List[int], 
+        removed_by: int
+    ) -> Dict[str, Any]:
+        """批量移除多个用户的角色"""
+        results = {
+            "success_count": 0,
+            "failed_count": 0,
+            "success": [],
+            "failed": []
+        }
+        
+        try:
+            # 验证用户和角色是否存在
+            from ..models.user import User
+            
+            # 批量检查用户是否存在
+            user_check_result = await self.db.execute(
+                select(User.id).where(User.id.in_(user_ids))
+            )
+            existing_user_ids = set(user_check_result.scalars().all())
+            
+            # 批量检查角色是否存在
+            role_check_result = await self.db.execute(
+                select(Role.id).where(Role.id.in_(role_ids))
+            )
+            existing_role_ids = set(role_check_result.scalars().all())
+            
+            # 记录不存在的用户和角色
+            for user_id in user_ids:
+                if user_id not in existing_user_ids:
+                    for role_id in role_ids:
+                        results["failed_count"] += 1
+                        results["failed"].append({
+                            "user_id": user_id,
+                            "role_id": role_id,
+                            "error": "用户不存在"
+                        })
+            
+            for role_id in role_ids:
+                if role_id not in existing_role_ids:
+                    for user_id in user_ids:
+                        if user_id in existing_user_ids:
+                            results["failed_count"] += 1
+                            results["failed"].append({
+                                "user_id": user_id,
+                                "role_id": role_id,
+                                "error": "角色不存在"
+                            })
+            
+            # 只处理存在的用户和角色
+            valid_user_ids = [uid for uid in user_ids if uid in existing_user_ids]
+            valid_role_ids = [rid for rid in role_ids if rid in existing_role_ids]
+            
+            if valid_user_ids and valid_role_ids:
+                # 批量查询现有的用户角色关联
+                existing_user_roles_result = await self.db.execute(
+                    select(UserRole.user_id, UserRole.role_id)
+                    .where(
+                        and_(
+                            UserRole.user_id.in_(valid_user_ids),
+                            UserRole.role_id.in_(valid_role_ids)
+                        )
+                    )
+                )
+                existing_user_roles = set(existing_user_roles_result.all())
+                
+                # 记录成功和失败的操作
+                for user_id in valid_user_ids:
+                    for role_id in valid_role_ids:
+                        if (user_id, role_id) in existing_user_roles:
+                            results["success_count"] += 1
+                            results["success"].append({
+                                "user_id": user_id,
+                                "role_id": role_id
+                            })
+                        else:
+                            results["failed_count"] += 1
+                            results["failed"].append({
+                                "user_id": user_id,
+                                "role_id": role_id,
+                                "error": "用户未拥有此角色"
+                            })
+                
+                # 批量删除用户角色关联（只删除存在的关联）
+                if existing_user_roles:
+                    await self.db.execute(
+                        delete(UserRole).where(
+                            and_(
+                                UserRole.user_id.in_(valid_user_ids),
+                                UserRole.role_id.in_(valid_role_ids)
+                            )
+                        )
+                    )
+            
+            await self.db.commit()
+            
+            logger.info(
+                f"Batch role removal completed: "
+                f"{results['success_count']} success, {results['failed_count']} failed"
+            )
+            
+            return results
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Batch role removal failed: {str(e)}")
+            raise_business_error("批量移除角色失败")
     
     async def get_user_roles(self, user_id: int) -> List[Role]:
         """获取用户的所有角色"""

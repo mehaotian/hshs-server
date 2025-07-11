@@ -13,7 +13,7 @@ from app.core.exceptions import (
 from ...schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
-    UserRoleAssignment, UserRoleRemoval, UserRoleBatchOperation, RoleAssignmentBatch,
+    UserRoleAssignment, UserRoleRemoval, RoleAssignmentBatch,
     RoleSearchQuery, PermissionSearchQuery, RoleStatistics
 )
 from app.services.role import RoleService
@@ -424,13 +424,13 @@ async def get_permissions(
 
 # ==================== 用户角色分配 ====================
 
-@router.post("/user/assign", summary="批量分配角色给用户")
+@router.post("/user/roles", summary="分配角色给用户")
 async def assign_roles_to_user(
     assignment: UserRoleAssignment,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:assign"))
 ):
-    """批量为用户分配角色"""
+    """分配角色给用户（支持单个或多个角色）"""
     try:
         role_service = RoleService(db)
         result = await role_service.assign_roles_to_user(
@@ -458,42 +458,13 @@ async def assign_roles_to_user(
         raise_business_error("批量分配角色失败", 1000)
 
 
-@router.delete("/user/unassign", summary="移除用户角色")
-async def remove_role_from_user(
-    assignment: UserRoleRemoval,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("role:assign"))
-):
-    """移除用户的角色"""
-    try:
-        role_service = RoleService(db)
-        result = await role_service.remove_roles_from_user(
-            user_id=assignment.user_id,
-            role_ids=assignment.role_ids
-        )
-
-        log_security_event(
-            "roles_removed",
-            user_id=current_user.id,
-            details=f"target_user_id: {assignment.user_id}, role_ids: {assignment.role_ids}, success: {result['success_count']}, failed: {result['failed_count']}"
-        )
-
-        return ResponseBuilder.success(
-            data=result,
-            message=f"角色移除完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
-        )
-    except Exception as e:
-        logger.error(f"Failed to remove role: {str(e)}")
-        raise_business_error("移除角色失败", 1000)
-
-
-@router.delete("/user/remove", summary="批量移除用户角色")
+@router.delete("/user/roles", summary="移除用户角色")
 async def remove_roles_from_user(
     removal: UserRoleRemoval,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:assign"))
 ):
-    """批量移除用户角色"""
+    """移除用户角色（支持单个或多个角色）"""
     try:
         role_service = RoleService(db)
         result = await role_service.remove_roles_from_user(
@@ -509,40 +480,79 @@ async def remove_roles_from_user(
 
         return ResponseBuilder.success(
             data=result,
-            message=f"批量移除角色完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
+            message=f"角色移除完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
         )
-
-    except BaseCustomException:
-        raise
     except Exception as e:
-        logger.error(f"Failed to remove roles: {str(e)}")
-        raise_business_error("批量移除角色失败", 1001)
+        logger.error(f"Failed to remove role: {str(e)}")
+        raise_business_error("移除角色失败", 1000)
 
 
-@router.post("/user/batch-assign", summary="批量分配角色")
+# 删除重复的 /user/remove 接口，功能已由 /user/unassign 提供
+
+
+@router.post("/users/batch/roles", summary="批量分配角色给多个用户")
 async def batch_assign_roles(
-    operation: UserRoleBatchOperation,
+    batch_assignment: RoleAssignmentBatch,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:assign"))
 ):
-    """批量为用户分配或移除角色"""
+    """批量为多个用户分配角色"""
     try:
         role_service = RoleService(db)
-        result = await role_service.batch_assign_roles(operation)
+        result = await role_service.batch_assign_roles_to_users(
+            user_ids=batch_assignment.user_ids,
+            role_ids=batch_assignment.role_ids,
+            assigned_by=current_user.id,
+            expires_at=batch_assignment.expires_at
+        )
 
         log_security_event(
-            "role_batch_operation",
+            "batch_roles_assigned",
             user_id=current_user.id,
-            details=f"operation: {operation.operation}, user_count: {len(operation.user_ids)}, role_count: {len(operation.role_ids)}, success_count: {result['success_count']}, failed_count: {result['failed_count']}"
+            details=f"user_count: {len(batch_assignment.user_ids)}, role_count: {len(batch_assignment.role_ids)}, success_count: {result['success_count']}, failed_count: {result['failed_count']}"
         )
 
         return ResponseBuilder.success(
             data=result,
-            message=f"批量操作完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
+            message=f"批量分配角色完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
         )
+    except BaseCustomException:
+        raise
     except Exception as e:
         logger.error(f"Failed to batch assign roles: {str(e)}")
         raise_business_error("批量分配角色失败", 1000)
+
+
+@router.delete("/users/batch/roles", summary="批量移除多个用户的角色")
+async def batch_remove_roles(
+    batch_removal: RoleAssignmentBatch,  # 复用相同的模型结构
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("role:assign"))
+):
+    """批量移除多个用户的角色"""
+    try:
+        role_service = RoleService(db)
+        result = await role_service.batch_remove_roles_from_users(
+            user_ids=batch_removal.user_ids,
+            role_ids=batch_removal.role_ids,
+            removed_by=current_user.id
+        )
+
+        log_security_event(
+            "batch_roles_removed",
+            user_id=current_user.id,
+            details=f"user_count: {len(batch_removal.user_ids)}, role_count: {len(batch_removal.role_ids)}, success_count: {result['success_count']}, failed_count: {result['failed_count']}"
+        )
+
+        return ResponseBuilder.success(
+            data=result,
+            message=f"批量移除角色完成：成功 {result['success_count']} 个，失败 {result['failed_count']} 个"
+        )
+    except BaseCustomException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to batch remove roles: {str(e)}")
+        raise_business_error("批量移除角色失败", 1000)
 
 
 @router.get("/user/{user_id}", summary="获取用户角色")

@@ -324,14 +324,9 @@ class UserRoleRemoval(BaseModel):
         from_attributes = True
 
 
-class UserRoleBatchOperation(BaseModel):
-    """用户角色批量操作模型"""
-    user_ids: List[int]
-    role_ids: List[int]
-    operation: str  # "assign" or "remove"
-
-    class Config:
-        from_attributes = True
+# UserRoleBatchOperation 模型已删除，使用 RoleAssignmentBatch 替代
+# 批量分配使用 RoleAssignmentBatch
+# 批量移除也使用 RoleAssignmentBatch（复用相同的数据结构）
 
 
 class RoleTemplate(BaseModel):
