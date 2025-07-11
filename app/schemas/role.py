@@ -49,11 +49,21 @@ class PermissionCreate(PermissionBase):
 
 class PermissionUpdate(BaseModel):
     """更新权限模型"""
+    name: Optional[str] = Field(None, max_length=100, description="权限名称")
     display_name: Optional[str] = Field(
         None, max_length=100, description="显示名称")
     description: Optional[str] = Field(
         None, max_length=500, description="权限描述")
+    module: Optional[str] = Field(None, max_length=50, description="所属模块")
+    action: Optional[PermissionType] = Field(None, description="操作类型")
+    resource: Optional[ResourceType] = Field(None, description="资源类型")
     sort_order: Optional[int] = Field(None, description="排序顺序")
+
+    @validator('name')
+    def validate_name(cls, v):
+        if v and not v.replace('_', '').replace(':', '').isalnum():
+            raise ValueError('权限名称只能包含字母、数字、下划线和冒号')
+        return v
 
 
 class PermissionResponse(PermissionBase):

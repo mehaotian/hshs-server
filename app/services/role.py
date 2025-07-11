@@ -265,9 +265,17 @@ class RoleService:
         if not permission:
             raise_not_found("Permission", permission_id)
         
-        # 检查系统权限是否可以修改
-        if permission.is_system and permission_data.name and permission_data.name != permission.name:
-            raise_validation_error("System permission name cannot be changed")
+        # 检查系统权限是否可以修改关键字段
+        if permission.is_system:
+            # 系统权限不允许修改名称、模块、操作类型和资源类型
+            if permission_data.name and permission_data.name != permission.name:
+                raise_validation_error("System permission name cannot be changed")
+            if permission_data.module and permission_data.module != permission.module:
+                raise_validation_error("System permission module cannot be changed")
+            if permission_data.action and permission_data.action != permission.action:
+                raise_validation_error("System permission action cannot be changed")
+            if permission_data.resource and permission_data.resource != permission.resource:
+                raise_validation_error("System permission resource cannot be changed")
         
         # 检查权限名是否重复（如果要更新名称）
         if permission_data.name and permission_data.name != permission.name:
@@ -347,8 +355,11 @@ class RoleService:
             if search_query.module:
                 conditions.append(Permission.module == search_query.module)
             
-            if search_query.operation_type:
-                conditions.append(Permission.operation_type == search_query.operation_type)
+            if search_query.action:
+                conditions.append(Permission.action == search_query.action)
+            
+            if search_query.resource:
+                conditions.append(Permission.resource == search_query.resource)
             
             if search_query.is_system is not None:
                 conditions.append(Permission.is_system == search_query.is_system)
@@ -357,11 +368,11 @@ class RoleService:
                 query = query.where(and_(*conditions))
         
         # 排序
-        if search_query and search_query.sort_by:
-            if search_query.sort_order == "desc":
-                query = query.order_by(getattr(Permission, search_query.sort_by).desc())
+        if search_query and search_query.order_by:
+            if search_query.order_desc:
+                query = query.order_by(getattr(Permission, search_query.order_by).desc())
             else:
-                query = query.order_by(getattr(Permission, search_query.sort_by))
+                query = query.order_by(getattr(Permission, search_query.order_by))
         else:
             query = query.order_by(Permission.module, Permission.sort_order)
         
@@ -380,8 +391,10 @@ class RoleService:
                 )
             if search_query.module:
                 conditions.append(Permission.module == search_query.module)
-            if search_query.operation_type:
-                conditions.append(Permission.operation_type == search_query.operation_type)
+            if search_query.action:
+                conditions.append(Permission.action == search_query.action)
+            if search_query.resource:
+                conditions.append(Permission.resource == search_query.resource)
             if search_query.is_system is not None:
                 conditions.append(Permission.is_system == search_query.is_system)
             

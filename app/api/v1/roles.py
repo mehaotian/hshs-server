@@ -352,9 +352,12 @@ async def get_permissions(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: Optional[str] = Query(None, description="搜索关键词"),
-    category: Optional[str] = Query(None, description="权限分类"),
-    sort_by: Optional[str] = Query("created_at", description="排序字段"),
-    sort_order: Optional[str] = Query("desc", description="排序方向"),
+    module: Optional[str] = Query(None, description="所属模块"),
+    action: Optional[str] = Query(None, description="操作类型"),
+    resource: Optional[str] = Query(None, description="资源类型"),
+    is_system: Optional[bool] = Query(None, description="是否系统权限"),
+    order_by: Optional[str] = Query("sort_order", description="排序字段"),
+    order_desc: Optional[bool] = Query(False, description="是否降序"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("permission:read"))
 ):
@@ -363,9 +366,14 @@ async def get_permissions(
         # 构建搜索查询
         search_query = PermissionSearchQuery(
             keyword=keyword,
-            category=category,
-            sort_by=sort_by,
-            sort_order=sort_order
+            module=module,
+            action=action,
+            resource=resource,
+            is_system=is_system,
+            page=page,
+            page_size=size,
+            order_by=order_by,
+            order_desc=order_desc
         )
 
         role_service = RoleService(db)

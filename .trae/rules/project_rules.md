@@ -13,7 +13,7 @@
 ## 后端开发规范 (Python + FastAPI + PostgreSQL)
 
 * **API 设计**：
-  * **RESTful 原则**：遵循 RESTful API 设计原则，使用资源导向的 URL (例如 `/users`, `/dramas/{id}/audios`)。
+  * **RESTful 原则**：遵循 RESTful API 设计原则，使用资源导向的 URL (例如 `/users`, `/dramas/audios{id}`)。
   * **版本控制**：考虑 API 版本化（例如 `/v1/users`），以便未来平滑升级。
   * **HTTP 方法**：正确使用 HTTP 方法（GET 用于查询，POST 用于创建，PUT/PATCH 用于更新，DELETE 用于删除）。
   * **状态码**：返回准确的 HTTP 状态码（例如 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 500 Internal Server Error）。
