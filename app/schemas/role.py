@@ -33,6 +33,7 @@ class PermissionBase(BaseModel):
     module: str = Field(..., max_length=50, description="所属模块")
     action: PermissionType = Field(..., description="操作类型")
     resource: ResourceType = Field(..., description="资源类型")
+    is_wildcard: bool = Field(False, description="是否通配符权限")
     sort_order: int = Field(0, description="排序顺序")
 
     @validator('name')
@@ -57,6 +58,8 @@ class PermissionUpdate(BaseModel):
     module: Optional[str] = Field(None, max_length=50, description="所属模块")
     action: Optional[PermissionType] = Field(None, description="操作类型")
     resource: Optional[ResourceType] = Field(None, description="资源类型")
+    is_wildcard: Optional[bool] = Field(None, description="是否通配符权限")
+    is_active: Optional[bool] = Field(None, description="是否激活")
     sort_order: Optional[int] = Field(None, description="排序顺序")
 
     @validator('name')
@@ -70,6 +73,7 @@ class PermissionResponse(PermissionBase):
     """权限响应模型"""
     id: int
     is_system: bool
+    is_active: bool
     created_at: datetime
     updated_at: datetime
 
@@ -109,7 +113,7 @@ class RoleBase(BaseModel):
 
 class RoleCreate(RoleBase):
     """创建角色模型"""
-    permissions: List[str] = Field(default_factory=list, description="权限列表")
+    permission_ids: List[int] = Field(default_factory=list, description="权限ID列表")
 
 
 class RoleUpdate(BaseModel):
@@ -119,14 +123,16 @@ class RoleUpdate(BaseModel):
         None, max_length=100, description="显示名称")
     description: Optional[str] = Field(
         None, max_length=500, description="角色描述")
+    is_active: Optional[bool] = Field(None, description="是否激活")
     sort_order: Optional[int] = Field(None, description="排序顺序")
-    permissions: Optional[List[str]] = Field(None, description="权限列表")
+    permission_ids: Optional[List[int]] = Field(None, description="权限ID列表")
 
 
 class RoleResponse(RoleBase):
     """角色响应模型"""
     id: int
     is_system: bool
+    is_active: bool
     permissions: List[PermissionResponse] = Field(
         default_factory=list, description="权限列表")
     user_count: int = Field(0, description="用户数量")
@@ -147,6 +153,7 @@ class RoleListResponse(BaseModel):
     display_name: str
     description: Optional[str]
     is_system: bool
+    is_active: bool
     user_count: int
     permission_count: int
     created_at: datetime
@@ -349,3 +356,62 @@ class RoleImportExport(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RolePermissionBase(BaseModel):
+    """角色权限关联基础模型"""
+    role_id: int = Field(..., description="角色ID")
+    permission_id: int = Field(..., description="权限ID")
+    expires_at: Optional[datetime] = Field(None, description="过期时间")
+
+    @validator('expires_at')
+    def validate_expires_at(cls, v):
+        if v and v <= datetime.utcnow():
+            raise ValueError('过期时间必须大于当前时间')
+        return v
+
+
+class RolePermissionCreate(RolePermissionBase):
+    """创建角色权限关联模型"""
+    pass
+
+
+class RolePermissionUpdate(BaseModel):
+    """更新角色权限关联模型"""
+    expires_at: Optional[datetime] = Field(None, description="过期时间")
+
+    @validator('expires_at')
+    def validate_expires_at(cls, v):
+        if v and v <= datetime.utcnow():
+            raise ValueError('过期时间必须大于当前时间')
+        return v
+
+
+class RolePermissionResponse(RolePermissionBase):
+    """角色权限关联响应模型"""
+    id: int
+    granted_by: Optional[int]
+    granted_at: datetime
+    is_expired: bool
+    role_name: Optional[str]
+    permission_name: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+
+
+class RolePermissionBatch(BaseModel):
+    """批量角色权限操作模型"""
+    role_id: int = Field(..., description="角色ID")
+    permission_ids: List[int] = Field(..., min_items=1, description="权限ID列表")
+    expires_at: Optional[datetime] = Field(None, description="过期时间")
+
+    @validator('expires_at')
+    def validate_expires_at(cls, v):
+        if v and v <= datetime.utcnow():
+            raise ValueError('过期时间必须大于当前时间')
+        return v

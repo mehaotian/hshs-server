@@ -15,8 +15,8 @@ class Role(Base):
     name = Column(String(50), unique=True, nullable=False, comment="角色名称")
     display_name = Column(String(100), nullable=True, comment="角色显示名称")
     description = Column(Text, nullable=True, comment="角色描述")
-    permissions = Column(JSON, nullable=True, comment="权限配置JSON")
     is_system = Column(Integer, default=0, comment="是否系统角色：1-是，0-否")
+    is_active = Column(Integer, default=1, comment="是否激活：1-是，0-否")
     sort_order = Column(Integer, default=0, comment="排序顺序")
     
     created_at = Column(DateTime, default=func.now(), comment="创建时间")
@@ -24,6 +24,7 @@ class Role(Base):
 
     # 关系映射
     user_roles = relationship("UserRole", back_populates="role", cascade="all, delete-orphan")
+    role_permissions = relationship("RolePermission", back_populates="role", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<Role(id={self.id}, name='{self.name}', display_name='{self.display_name}')>"
@@ -31,79 +32,50 @@ class Role(Base):
     @property
     def permission_list(self) -> List[str]:
         """获取权限列表"""
-        if not self.permissions:
-            return []
-        # 兼容处理：如果permissions是列表，直接返回；如果是字典，取permissions字段
-        if isinstance(self.permissions, list):
-            return self.permissions
-        elif isinstance(self.permissions, dict):
-            return self.permissions.get('permissions', [])
-        else:
-            return []
+        return [rp.permission.name for rp in self.role_permissions if rp.permission]
     
     def has_permission(self, permission: str) -> bool:
         """检查角色是否拥有指定权限（支持通配符匹配）"""
-        permissions = self.permission_list
-        
-        # 1. 检查超级权限 *:* 或 *
-        if '*:*' in permissions or '*' in permissions:
-            return True
-        
-        # 2. 精确匹配
-        if permission in permissions:
-            return True
-        
-        # 3. 通配符匹配
-        if ':' in permission:
-            module, action = permission.split(':', 1)
+        for rp in self.role_permissions:
+            if not rp.permission:
+                continue
+                
+            perm_name = rp.permission.name
             
-            # 检查模块通配符 module:*
-            module_wildcard = f"{module}:*"
-            if module_wildcard in permissions:
+            # 1. 检查超级权限 *:* 或 *
+            if perm_name in ['*:*', '*']:
                 return True
             
-            # 检查操作通配符 *:action
-            action_wildcard = f"*:{action}"
-            if action_wildcard in permissions:
+            # 2. 精确匹配
+            if perm_name == permission:
                 return True
+            
+            # 3. 通配符匹配（如果权限支持通配符）
+            if rp.permission.is_wildcard and ':' in permission:
+                module, action = permission.split(':', 1)
+                
+                # 检查模块通配符 module:*
+                if perm_name == f"{module}:*":
+                    return True
+                
+                # 检查操作通配符 *:action
+                if perm_name == f"*:{action}":
+                    return True
         
         return False
     
-    def add_permission(self, permission: str) -> None:
+    def add_permission(self, permission_id: int) -> None:
         """添加权限"""
-        if not self.permissions:
-            self.permissions = {'permissions': []}
-        
-        # 兼容处理：统一转换为字典格式
-        if isinstance(self.permissions, list):
-            permissions = self.permissions
-            if permission not in permissions:
-                permissions.append(permission)
-            self.permissions = {'permissions': permissions}
-        elif isinstance(self.permissions, dict):
-            permissions = self.permissions.get('permissions', [])
-            if permission not in permissions:
-                permissions.append(permission)
-                self.permissions = {'permissions': permissions}
-        else:
-            self.permissions = {'permissions': [permission]}
+        # 检查是否已存在该权限
+        existing = any(rp.permission_id == permission_id for rp in self.role_permissions)
+        if not existing:
+            from app.models.role import RolePermission
+            role_permission = RolePermission(role_id=self.id, permission_id=permission_id)
+            self.role_permissions.append(role_permission)
     
-    def remove_permission(self, permission: str) -> None:
+    def remove_permission(self, permission_id: int) -> None:
         """移除权限"""
-        if not self.permissions:
-            return
-        
-        # 兼容处理：统一转换为字典格式
-        if isinstance(self.permissions, list):
-            permissions = self.permissions
-            if permission in permissions:
-                permissions.remove(permission)
-            self.permissions = {'permissions': permissions}
-        elif isinstance(self.permissions, dict):
-            permissions = self.permissions.get('permissions', [])
-            if permission in permissions:
-                permissions.remove(permission)
-                self.permissions = {'permissions': permissions}
+        self.role_permissions = [rp for rp in self.role_permissions if rp.permission_id != permission_id]
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
@@ -114,6 +86,7 @@ class Role(Base):
             'description': self.description,
             'permissions': self.permission_list,
             'is_system': bool(self.is_system),
+            'is_active': bool(self.is_active),
             'sort_order': self.sort_order,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -197,10 +170,15 @@ class Permission(Base):
     action = Column(String(50), nullable=True, comment="操作类型")
     resource = Column(String(50), nullable=True, comment="资源类型")
     is_system = Column(Integer, default=0, comment="是否系统权限")
+    is_wildcard = Column(Integer, default=0, comment="是否通配符权限：1-是，0-否")
+    is_active = Column(Integer, default=1, comment="是否激活：1-是，0-否")
     sort_order = Column(Integer, default=0, comment="排序顺序")
     
     created_at = Column(DateTime, default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
+    
+    # 关系映射
+    role_permissions = relationship("RolePermission", back_populates="permission", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<Permission(id={self.id}, name='{self.name}')>"
@@ -216,6 +194,8 @@ class Permission(Base):
             'action': self.action,
             'resource': self.resource,
             'is_system': bool(self.is_system),
+            'is_wildcard': bool(self.is_wildcard),
+            'is_active': bool(self.is_active),
             'sort_order': self.sort_order,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -239,9 +219,59 @@ class Permission(Base):
                 'action': action,
                 'resource': module,
                 'is_system': 1,
-                'sort_order': len(permissions)
+                'sort_order': len(permissions),
+                'is_wildcard': 1 if '*' in name else 0
             })
         return permissions
+
+
+class RolePermission(Base):
+    """角色权限关联模型"""
+    __tablename__ = "role_permissions"
+    __table_args__ = (
+        UniqueConstraint('role_id', 'permission_id', name='uk_role_permission'),
+        {'comment': '角色权限关联表'}
+    )
+
+    id = Column(Integer, primary_key=True, index=True, comment="关联ID")
+    role_id = Column(Integer, ForeignKey('roles.id', ondelete='CASCADE'), nullable=False, comment="角色ID")
+    permission_id = Column(Integer, ForeignKey('permissions.id', ondelete='CASCADE'), nullable=False, comment="权限ID")
+    granted_by = Column(Integer, ForeignKey('users.id'), nullable=True, comment="授权者ID")
+    granted_at = Column(DateTime, default=func.now(), comment="授权时间")
+    expires_at = Column(DateTime, nullable=True, comment="过期时间")
+    
+    created_at = Column(DateTime, default=func.now(), comment="创建时间")
+
+    # 关系映射
+    role = relationship("Role", back_populates="role_permissions")
+    permission = relationship("Permission", back_populates="role_permissions")
+    granter = relationship("User", foreign_keys=[granted_by])
+    
+    def __repr__(self) -> str:
+        return f"<RolePermission(role_id={self.role_id}, permission_id={self.permission_id})>"
+    
+    @property
+    def is_expired(self) -> bool:
+        """检查权限是否已过期"""
+        if not self.expires_at:
+            return False
+        from datetime import datetime
+        return datetime.utcnow() > self.expires_at
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        return {
+            'id': self.id,
+            'role_id': self.role_id,
+            'permission_id': self.permission_id,
+            'role_name': self.role.name if self.role else None,
+            'permission_name': self.permission.name if self.permission else None,
+            'granted_by': self.granted_by,
+            'granted_at': self.granted_at.isoformat() if self.granted_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'is_expired': self.is_expired,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 # 预定义的系统权限
