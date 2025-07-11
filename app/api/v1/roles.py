@@ -463,6 +463,9 @@ async def update_permission(
             data=permission_data,
             message="权限信息更新成功"
         )
+    except BaseCustomException:
+        # 让自定义异常传播到全局异常处理器，这样可以返回精确的错误信息
+        raise
     except Exception as e:
         logger.error(f"Failed to update permission: {str(e)}")
         raise_business_error("更新权限失败", 1000)
