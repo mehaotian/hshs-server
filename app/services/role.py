@@ -4,7 +4,7 @@ from sqlalchemy import select, update, delete, insert, func, and_, or_
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 
-from app.models.role import Role, Permission, UserRole
+from app.models.role import Role, Permission, UserRole, RolePermission
 from app.models.user import User
 from app.schemas.role import (
     RoleCreate, RoleUpdate, PermissionCreate, PermissionUpdate,
@@ -35,14 +35,42 @@ class RoleService:
         if existing_role:
             raise_duplicate("Role", "name", role_data.name)
         
-        # 创建角色
-        role_dict = role_data.dict()
+        # 验证权限ID是否存在（如果提供了permission_ids）
+        if role_data.permission_ids:
+            for permission_id in role_data.permission_ids:
+                permission = await self.get_permission_by_id(permission_id)
+                if not permission:
+                    raise_validation_error(f"权限ID {permission_id} 不存在")
+        
+        # 创建角色（排除permission_ids字段）
+        role_dict = role_data.dict(exclude={'permission_ids'})
         role = Role(**role_dict)
         
         try:
             self.db.add(role)
+            await self.db.flush()  # 获取角色ID但不提交事务
+            
+            # 添加角色权限关联
+            if role_data.permission_ids:
+                for permission_id in role_data.permission_ids:
+                    role_permission = RolePermission(
+                        role_id=role.id,
+                        permission_id=permission_id
+                    )
+                    self.db.add(role_permission)
+            
             await self.db.commit()
             await self.db.refresh(role)
+            
+            # 预加载权限数据以避免后续查询问题
+            if role_data.permission_ids:
+                from sqlalchemy.orm import selectinload
+                result = await self.db.execute(
+                    select(Role)
+                    .options(selectinload(Role.role_permissions).selectinload(RolePermission.permission))
+                    .where(Role.id == role.id)
+                )
+                role = result.scalar_one()
             
             logger.info(f"Role created: {role.name} (ID: {role.id})")
             return role
@@ -50,7 +78,22 @@ class RoleService:
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Failed to create role: {str(e)}")
-            raise_business_error("Failed to create role")
+            
+            # 检查是否是无效字段错误
+            error_msg = str(e)
+            if "invalid keyword argument" in error_msg:
+                # 提取无效字段名
+                import re
+                match = re.search(r"'(\w+)' is an invalid keyword argument", error_msg)
+                if match:
+                    field_name = match.group(1)
+                    raise_validation_error(f"无效的字段: {field_name}")
+            elif "required" in error_msg.lower():
+                raise_validation_error("缺少必填字段")
+            elif "constraint" in error_msg.lower() or "unique" in error_msg.lower():
+                raise_validation_error("数据约束违反")
+            
+            raise_business_error("创建角色失败")
     
     async def get_role_by_id(self, role_id: int) -> Optional[Role]:
         """根据ID获取角色"""

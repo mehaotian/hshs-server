@@ -8,7 +8,7 @@ from app.core.response import ResponseBuilder
 from app.core.logger import logger, log_security_event
 from app.models.user import User
 from app.core.exceptions import (
-    raise_business_error, raise_not_found_resource, raise_server_error, BaseCustomException
+    raise_business_error, raise_not_found_resource, raise_server_error, BaseCustomException, ValidationError
 )
 from ...schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
@@ -25,7 +25,7 @@ router = APIRouter()
 
 @router.post("/add", response_model=RoleResponse, summary="创建角色")
 async def create_role(
-    role_data: RoleCreate,
+    role_input: RoleCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:create"))
 ):
@@ -34,7 +34,7 @@ async def create_role(
 
     try:
         role_service = RoleService(db)
-        role = await role_service.create_role(role_data)
+        role = await role_service.create_role(role_input)
 
         log_security_event(
             "role_created",
@@ -42,16 +42,62 @@ async def create_role(
             details=f"role_name: {role.name}, role_id: {role.id}"
         )
 
+        # 在数据库会话仍然活跃时获取角色数据，避免访问关系属性
+        role_data = {
+            'id': role.id,
+            'name': role.name,
+            'display_name': role.display_name,
+            'description': role.description,
+            'permissions': [],  # 暂时返回空数组，避免关系查询
+            'is_system': bool(role.is_system),
+            'is_active': bool(role.is_active),
+            'sort_order': role.sort_order,
+            'created_at': role.created_at.isoformat() if role.created_at else None,
+            'updated_at': role.updated_at.isoformat() if role.updated_at else None,
+        }
+        
+        # 如果有权限ID，手动查询权限名称
+        if role_input.permission_ids:
+            from sqlalchemy import select
+            from app.models.role import Permission
+            permission_result = await db.execute(
+                select(Permission.name).where(Permission.id.in_(role_input.permission_ids))
+            )
+            role_data['permissions'] = [name for name, in permission_result.fetchall()]
+        
         return ResponseBuilder.success(
-            data=role.to_dict(),
+            data=role_data,
             message="角色创建成功"
         )
+    except ValidationError as e:
+        # 捕获验证错误并返回具体的中文错误信息
+        logger.error(f"Validation error in create role: {str(e)}")
+        raise_business_error(str(e), 1001)
     except BaseCustomException:
         # 让自定义异常传播到全局异常处理器
         raise
     except Exception as e:
         logger.error(f"Failed to create role: {str(e)}")
-        raise_business_error("创建角色失败", 1000)
+        
+        # 检查是否是特定类型的错误并返回更具体的中文错误信息
+        error_msg = str(e)
+        if "invalid keyword argument" in error_msg:
+            # 提取无效字段名
+            import re
+            match = re.search(r"'(\w+)' is an invalid keyword argument", error_msg)
+            if match:
+                field_name = match.group(1)
+                raise_business_error(f"无效的字段: {field_name}", 1002)
+            else:
+                raise_business_error("请求包含无效字段", 1002)
+        elif "required" in error_msg.lower():
+            raise_business_error("缺少必填字段", 1003)
+        elif "constraint" in error_msg.lower() or "unique" in error_msg.lower():
+            raise_business_error("数据约束违反，可能存在重复数据", 1004)
+        elif "foreign key" in error_msg.lower():
+            raise_business_error("关联数据不存在", 1005)
+        else:
+            raise_business_error("创建角色失败", 1000)
 
 
 @router.get("/detail/{role_id}", response_model=RoleResponse, summary="获取角色信息")
