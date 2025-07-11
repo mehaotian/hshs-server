@@ -227,6 +227,9 @@ async def delete_role(
         return ResponseBuilder.success(
             message="角色删除成功"
         )
+    except BaseCustomException:
+        # 重新抛出自定义异常，保持原有的错误信息
+        raise
     except Exception as e:
         logger.error(f"Failed to delete role: {str(e)}")
         raise_business_error("删除角色失败", 1000)

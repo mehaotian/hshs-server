@@ -409,11 +409,12 @@ async def get_user_profile_by_id(
 
 @router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
 async def get_current_user_info(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """获取当前登录用户的详细信息（包括角色和权限）"""
     return ResponseBuilder.success(
-        data=current_user.to_dict_sync(include_sensitive=True),
+        data=await current_user.to_dict(include_sensitive=True, db=db),
         message="获取用户信息成功"
     )
 

@@ -959,6 +959,9 @@ class RoleService:
         """获取用户的所有角色"""
         result = await self.db.execute(
             select(Role)
+            .options(
+                selectinload(Role.role_permissions).selectinload(RolePermission.permission)
+            )
             .join(UserRole, Role.id == UserRole.role_id)
             .where(UserRole.user_id == user_id)
             .where(

@@ -99,11 +99,14 @@ class User(Base):
         # 使用数据库会话查询权限
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
-        from app.models.role import UserRole, Role
+        from app.models.role import UserRole, Role, RolePermission
         
         # 查询用户的角色，并预加载权限信息
         result = await db.execute(
             select(Role)
+            .options(
+                selectinload(Role.role_permissions).selectinload(RolePermission.permission)
+            )
             .join(UserRole, Role.id == UserRole.role_id)
             .where(UserRole.user_id == self.id)
         )
@@ -136,10 +139,14 @@ class User(Base):
         
         # 使用数据库会话查询角色并检查权限
         from sqlalchemy import select
-        from app.models.role import UserRole, Role
+        from sqlalchemy.orm import selectinload
+        from app.models.role import UserRole, Role, RolePermission
         
         result = await db.execute(
             select(Role)
+            .options(
+                selectinload(Role.role_permissions).selectinload(RolePermission.permission)
+            )
             .join(UserRole, Role.id == UserRole.role_id)
             .where(UserRole.user_id == self.id)
         )
