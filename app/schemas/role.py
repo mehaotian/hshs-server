@@ -123,6 +123,7 @@ class RoleBase(BaseModel):
 
 class RoleCreate(RoleBase):
     """创建角色模型"""
+    is_active: bool = Field(True, description="是否激活")
     permission_ids: List[int] = Field(default_factory=list, description="权限ID列表")
 
 
