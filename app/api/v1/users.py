@@ -208,8 +208,11 @@ async def delete_user(
 async def get_users(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
-    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（用户名、邮箱、真实姓名）"),
+    username: Optional[str] = Query(None, description="用户名（精确匹配）"),
+    phone: Optional[str] = Query(None, description="手机号码（模糊匹配）"),
     status: Optional[str] = Query(None, description="用户状态"),
+    dept_id: Optional[str] = Query(None, description="部门ID"),
     role_id: Optional[str] = Query(None, description="角色ID"),
     created_after: Optional[str] = Query(None, description="创建时间起始"),
     created_before: Optional[str] = Query(None, description="创建时间结束"),
@@ -234,7 +237,10 @@ async def get_users(
         
         search_query = UserSearchQuery(
             keyword=keyword,
-            status=status,
+            username=username,
+            phone=phone,
+            status=int(status) if status and status.isdigit() else None,
+            dept_id=int(dept_id) if dept_id and dept_id.isdigit() else None,
             role=role_filter,
             created_after=created_after,
             created_before=created_before,

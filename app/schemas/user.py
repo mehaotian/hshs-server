@@ -129,6 +129,7 @@ class UserListResponse(BaseModel):
     username: str
     email: str
     real_name: Optional[str]
+    phone: Optional[str] = Field(None, description="手机号")
     status: UserStatus
     last_login_at: Optional[datetime]
     created_at: datetime
@@ -215,18 +216,21 @@ class RefreshTokenRequest(BaseModel):
 
 
 class UserSearchQuery(BaseModel):
-    """用户搜索查询模型"""
+    """用户搜索查询参数"""
     keyword: Optional[str] = Field(None, description="关键词搜索（用户名、邮箱、真实姓名）")
-    status: Optional[UserStatus] = Field(None, description="用户状态")
-    role: Optional[str] = Field(None, description="角色筛选")
+    username: Optional[str] = Field(None, description="真实姓名（模糊匹配）")
+    phone: Optional[str] = Field(None, description="手机号码（模糊匹配）")
+    status: Optional[int] = Field(None, description="用户状态")
+    dept_id: Optional[int] = Field(None, description="部门ID")
+    role: Optional[str] = Field(None, description="角色名称")
     created_after: Optional[datetime] = Field(None, description="创建时间起始")
     created_before: Optional[datetime] = Field(None, description="创建时间结束")
     last_login_after: Optional[datetime] = Field(None, description="最后登录时间起始")
     last_login_before: Optional[datetime] = Field(None, description="最后登录时间结束")
     page: int = Field(1, ge=1, description="页码")
     page_size: int = Field(20, ge=1, le=100, description="每页数量")
-    order_by: str = Field("created_at", description="排序字段")
-    order_desc: bool = Field(True, description="是否降序")
+    order_by: Optional[str] = Field("created_at", description="排序字段")
+    order_desc: bool = Field(True, description="是否降序排列")
 
 
 class UserBatchOperation(BaseModel):

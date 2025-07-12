@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from app.models.user import User, UserProfile
 from app.models.role import UserRole, Role
+from app.models.department import DepartmentMember
 from app.schemas.user import (
     UserCreate, UserUpdate, UserPasswordUpdate, UserSearchQuery,
     UserProfileCreate, UserProfileUpdate, UserBatchOperation
@@ -187,6 +188,7 @@ class UserService:
         if search_query:
             conditions = []
             
+            # 关键词搜索（用户名、邮箱、真实姓名）
             if search_query.keyword:
                 keyword = f"%{search_query.keyword}%"
                 conditions.append(
@@ -197,9 +199,33 @@ class UserService:
                     )
                 )
             
-            if search_query.status:
+            # 真实姓名模糊匹配
+            if search_query.username:
+                username_pattern = f"%{search_query.username}%"
+                conditions.append(User.real_name.ilike(username_pattern))
+            
+            # 手机号模糊匹配
+            if search_query.phone:
+                phone_pattern = f"%{search_query.phone}%"
+                conditions.append(User.phone.ilike(phone_pattern))
+            
+            # 用户状态
+            if search_query.status is not None:
                 conditions.append(User.status == search_query.status)
             
+            # 部门查询
+            if search_query.dept_id:
+                # 需要关联部门成员表
+                query = query.join(
+                    DepartmentMember, 
+                    and_(
+                        User.id == DepartmentMember.user_id,
+                        DepartmentMember.department_id == search_query.dept_id,
+                        DepartmentMember.status == DepartmentMember.STATUS_ACTIVE
+                    )
+                )
+            
+            # 时间范围查询
             if search_query.created_after:
                 conditions.append(User.created_at >= search_query.created_after)
             
@@ -223,6 +249,8 @@ class UserService:
         if search_query:
             # 应用相同的搜索条件
             conditions = []
+            
+            # 关键词搜索
             if search_query.keyword:
                 keyword = f"%{search_query.keyword}%"
                 conditions.append(
@@ -232,8 +260,33 @@ class UserService:
                         User.email.ilike(keyword)
                     )
                 )
-            if search_query.status:
+            
+            # 真实姓名模糊匹配
+            if search_query.username:
+                username_pattern = f"%{search_query.username}%"
+                conditions.append(User.real_name.ilike(username_pattern))
+            
+            # 手机号模糊匹配
+            if search_query.phone:
+                phone_pattern = f"%{search_query.phone}%"
+                conditions.append(User.phone.ilike(phone_pattern))
+            
+            # 用户状态
+            if search_query.status is not None:
                 conditions.append(User.status == search_query.status)
+            
+            # 部门查询
+            if search_query.dept_id:
+                count_query = count_query.join(
+                    DepartmentMember, 
+                    and_(
+                        User.id == DepartmentMember.user_id,
+                        DepartmentMember.department_id == search_query.dept_id,
+                        DepartmentMember.status == DepartmentMember.STATUS_ACTIVE
+                    )
+                )
+            
+            # 时间范围查询
             if search_query.created_after:
                 conditions.append(User.created_at >= search_query.created_after)
             if search_query.created_before:
@@ -260,6 +313,7 @@ class UserService:
                 "username": user.username,
                 "email": user.email,
                 "real_name": user.real_name,
+                "phone": user.phone,
                 "status": user.status,
                 "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
