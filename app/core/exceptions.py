@@ -551,8 +551,34 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     error_type = first_error["type"]
     error_msg = first_error["msg"]
     
-    # 根据错误类型映射业务状态码
-    business_code, translated_msg = map_validation_error_to_business_code(field, error_type, error_msg)
+    # 特殊处理：当请求体缺失时，提供更精确的错误信息
+    if error_type == "missing" and first_error["loc"] == ("body",):
+        # 根据接口路径提供更精确的错误信息
+        if "/auth/refresh" in request.url.path:
+            translated_msg = "请求体缺失，刷新令牌接口需要提供refresh_token参数"
+            business_code = 2002
+        elif "/auth/login" in request.url.path:
+            translated_msg = "请求体缺失，登录接口需要提供用户名和密码"
+            business_code = 2001
+        elif "/auth/register" in request.url.path:
+            translated_msg = "请求体缺失，注册接口需要提供完整的注册信息"
+            business_code = 3001
+        else:
+            translated_msg = "请求体缺失，请检查请求格式"
+            business_code = 1001
+    # 特殊处理：针对特定字段缺失提供更精确的错误信息
+    elif error_type == "missing" and field == "refresh_token" and "/auth/refresh" in request.url.path:
+        translated_msg = "缺少refresh_token参数，请提供有效的刷新令牌"
+        business_code = 2002
+    elif error_type == "missing" and field in ["username", "password"] and "/auth/login" in request.url.path:
+        if field == "username":
+            translated_msg = "缺少用户名参数，请提供用户名"
+        else:
+            translated_msg = "缺少密码参数，请提供密码"
+        business_code = 2001
+    else:
+        # 根据错误类型映射业务状态码
+        business_code, translated_msg = map_validation_error_to_business_code(field, error_type, error_msg)
     
     # 记录异常日志
     logger.warning(

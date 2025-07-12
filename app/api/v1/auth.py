@@ -158,9 +158,10 @@ async def login(
             expires_delta=refresh_token_expires
         )
         
-        # 计算过期时间戳（毫秒）
+        # 计算过期时间并格式化为指定格式（使用本地时间）
         from datetime import datetime
-        expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
+        expires_datetime = datetime.now() + access_token_expires
+        expires_formatted = expires_datetime.strftime("%Y/%m/%d %H:%M:%S")
         
         # 更新用户登录信息
         user.update_login_info()
@@ -186,7 +187,7 @@ async def login(
             permissions=user_permissions,
             access_token=access_token,
             refresh_token=refresh_token,
-            expires=str(expires_timestamp)
+            expires=expires_formatted
         )
         
         return LoginResponse(
@@ -244,9 +245,10 @@ async def login_for_access_token(
             expires_delta=refresh_token_expires
         )
         
-        # 计算过期时间戳（毫秒）
+        # 计算过期时间并格式化为指定格式（使用本地时间）
         from datetime import datetime
-        expires_timestamp = int((datetime.utcnow() + access_token_expires).timestamp() * 1000)
+        expires_datetime = datetime.now() + access_token_expires
+        expires_formatted = expires_datetime.strftime("%Y/%m/%d %H:%M:%S")
         
         # 更新用户登录信息
         user.update_login_info()
@@ -271,7 +273,7 @@ async def login_for_access_token(
             permissions=user_permissions,
             access_token=access_token,
             refresh_token=refresh_token,
-            expires=str(expires_timestamp)
+            expires=expires_formatted
         )
         
         return LoginResponse(
@@ -284,7 +286,7 @@ async def login_for_access_token(
         raise_business_error("登录失败，请稍后重试", 1000)
 
 
-@router.post("/refresh", response_model=Token, summary="刷新令牌")
+@router.post("/refresh", response_model=LoginResponse, summary="刷新令牌")
 async def refresh_token(
     token_data: RefreshToken,
     db: AsyncSession = Depends(get_db)
@@ -312,12 +314,21 @@ async def refresh_token(
             expires_delta=access_token_expires
         )
         
-        # 可选：生成新的刷新令牌
+        # 生成新的刷新令牌
         refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         new_refresh_token = auth_manager.create_refresh_token(
             data={"sub": str(user.id)},
             expires_delta=refresh_token_expires
         )
+        
+        # 计算过期时间并格式化为指定格式（使用本地时间）
+        from datetime import datetime
+        expires_datetime = datetime.now() + access_token_expires
+        expires_formatted = expires_datetime.strftime("%Y/%m/%d %H:%M:%S")
+        
+        # 获取用户角色和权限
+        user_roles = await user.get_roles(db) if hasattr(user, 'get_roles') else ["admin"]
+        user_permissions = await user.get_permissions(db) if hasattr(user, 'get_permissions') else ["*:*:*"]
         
         log_security_event(
             "token_refreshed",
@@ -325,11 +336,21 @@ async def refresh_token(
             details={"username": user.username}
         )
         
-        return Token(
+        # 构建与登录接口相同的响应数据
+        login_data_response = LoginData(
+            avatar=user.avatar_url or '',
+            username=user.username,
+            nickname=user.real_name or user.username,
+            roles=user_roles,
+            permissions=user_permissions,
             access_token=access_token,
             refresh_token=new_refresh_token,
-            token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires=expires_formatted
+        )
+        
+        return LoginResponse(
+            code=0,
+            data=login_data_response
         )
         
     except Exception as e:

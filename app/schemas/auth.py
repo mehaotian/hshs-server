@@ -177,7 +177,7 @@ class LoginData(BaseModel):
     permissions: list[str] = Field(default_factory=list, description="用户权限列表")
     access_token: str = Field(..., description="访问令牌")
     refresh_token: str = Field(..., description="刷新令牌")
-    expires: str = Field(..., description="过期时间戳（毫秒）")
+    expires: str = Field(..., description="过期时间（格式：yyyy/MM/dd HH:mm:ss）")
     
     class Config:
         json_schema_extra = {
@@ -189,7 +189,7 @@ class LoginData(BaseModel):
                 "permissions": ["*:*:*"],
                 "access_token": "eyJhbGciOiJIUzUxMiJ9.admin",
                 "refresh_token": "eyJhbGciOiJIUzUxMiJ9.adminRefresh",
-                "expires": "1951200000000"
+                "expires": "2025/12/31 23:59:59"
             }
         }
 
@@ -212,7 +212,7 @@ class LoginResponse(BaseModel):
                     "permissions": ["*:*:*"],
                     "access_token": "eyJhbGciOiJIUzUxMiJ9.admin",
                     "refresh_token": "eyJhbGciOiJIUzUxMiJ9.adminRefresh",
-                    "expires": "1951200000000"
+                    "expires": "2025/12/31 23:59:59"
                 }
             }
         }

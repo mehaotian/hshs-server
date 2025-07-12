@@ -121,6 +121,11 @@ class AuthManager:
             )
     
     @staticmethod
+    def verify_refresh_token(token: str) -> Dict[str, Any]:
+        """验证刷新令牌"""
+        return AuthManager.verify_token(token, token_type="refresh")
+    
+    @staticmethod
     async def get_current_user(
         credentials: HTTPAuthorizationCredentials = Depends(security),
         db: AsyncSession = Depends(get_db)
