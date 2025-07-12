@@ -303,6 +303,7 @@ async def get_roles(
                 "display_name": role.display_name,
                 "description": role.description,
                 "is_system": role.is_system,
+                "is_active": role.is_active,
                 "user_count": user_count,
                 "permission_count": permission_count,
                 "created_at": role.created_at.isoformat() if role.created_at else None
