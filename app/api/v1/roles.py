@@ -289,13 +289,37 @@ async def get_roles(
         for role in roles:
             # 从批量查询结果中获取用户数量
             user_count = user_counts.get(role.id, 0)
-            # 修复权限计数逻辑 - role.permissions是JSON列
+            # 修复权限计数逻辑 - 考虑通配符权限的展开
             permission_count = 0
-            if hasattr(role, 'permissions') and role.permissions:
-                if isinstance(role.permissions, dict) and 'permissions' in role.permissions:
-                    permission_count = len(role.permissions['permissions'])
-                elif isinstance(role.permissions, list):
-                    permission_count = len(role.permissions)
+            if hasattr(role, 'role_permissions') and role.role_permissions:
+                # 获取角色的所有权限名称
+                role_permissions = [rp.permission.name for rp in role.role_permissions if rp.permission]
+                
+                # 计算展开后的权限数量
+                from app.models.role import SYSTEM_PERMISSIONS
+                expanded_permissions = set()
+                
+                for permission in role_permissions:
+                    if permission == '*' or permission == '*:*':
+                        # 超级权限，添加所有系统权限
+                        expanded_permissions.update(SYSTEM_PERMISSIONS.keys())
+                    elif permission.endswith(':*'):
+                        # 模块通配符权限，添加该模块的所有权限
+                        module = permission[:-2]  # 移除 ':*'
+                        for sys_perm in SYSTEM_PERMISSIONS.keys():
+                            if sys_perm.startswith(f"{module}:"):
+                                expanded_permissions.add(sys_perm)
+                    elif permission.startswith('*:'):
+                        # 操作通配符权限，添加所有模块的该操作权限
+                        action = permission[2:]  # 移除 '*:'
+                        for sys_perm in SYSTEM_PERMISSIONS.keys():
+                            if sys_perm.endswith(f":{action}"):
+                                expanded_permissions.add(sys_perm)
+                    else:
+                        # 具体权限，直接添加
+                        expanded_permissions.add(permission)
+                
+                permission_count = len(expanded_permissions)
 
             role_data = {
                 "id": role.id,

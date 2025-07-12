@@ -243,8 +243,10 @@ class RoleService:
         search_query: Optional[RoleSearchQuery] = None
     ) -> Tuple[List[Role], int]:
         """获取角色列表（优化版本）"""
-        # 基础查询，Role.permissions是JSON列不需要预加载
-        query = select(Role)
+        # 基础查询，预加载role_permissions关系以支持权限计数
+        query = select(Role).options(
+            selectinload(Role.role_permissions).selectinload(RolePermission.permission)
+        )
         
         # 构建搜索条件的公共函数
         def build_conditions(search_query):
