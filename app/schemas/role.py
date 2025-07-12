@@ -138,12 +138,22 @@ class RoleUpdate(BaseModel):
     permission_ids: Optional[List[int]] = Field(None, description="权限ID列表")
 
 
+class PermissionSimple(BaseModel):
+    """简化权限模型"""
+    id: int
+    name: str
+    display_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class RoleResponse(RoleBase):
     """角色响应模型"""
     id: int
     is_system: bool
     is_active: bool
-    permissions: List[PermissionResponse] = Field(
+    permissions: List[PermissionSimple] = Field(
         default_factory=list, description="权限列表")
     user_count: int = Field(0, description="用户数量")
     created_at: datetime

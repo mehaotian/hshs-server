@@ -14,7 +14,7 @@ from ...schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
     UserRoleAssignment, UserRoleRemoval, RoleAssignmentBatch,
-    RoleSearchQuery, PermissionSearchQuery, RoleStatistics
+    RoleSearchQuery, PermissionSearchQuery, RoleStatistics, PermissionSimple
 )
 from app.services.role import RoleService
 
@@ -52,6 +52,7 @@ async def create_role(
             'is_system': bool(role.is_system),
             'is_active': bool(role.is_active),
             'sort_order': role.sort_order,
+            'user_count': 0,  # 默认值，可以后续优化为实际查询
             'created_at': role.created_at.isoformat() if role.created_at else None,
             'updated_at': role.updated_at.isoformat() if role.updated_at else None,
         }
@@ -124,20 +125,67 @@ async def get_role(
             'is_system': bool(role.is_system),
             'is_active': bool(role.is_active),
             'sort_order': role.sort_order,
+            'user_count': 0,  # 默认值，可以后续优化为实际查询
             'created_at': role.created_at.isoformat() if role.created_at else None,
             'updated_at': role.updated_at.isoformat() if role.updated_at else None,
         }
         
-        # 手动查询权限信息
+        # 手动查询权限信息并展开通配符权限
         from sqlalchemy import select
-        from app.models.role import RolePermission, Permission
+        from app.models.role import RolePermission, Permission, SYSTEM_PERMISSIONS
+        
+        # 查询角色的原始权限
         permission_query = (
-            select(Permission.name)
+            select(Permission.id, Permission.name, Permission.display_name)
             .join(RolePermission, Permission.id == RolePermission.permission_id)
             .where(RolePermission.role_id == role.id)
         )
         permission_result = await db.execute(permission_query)
-        role_data['permissions'] = [name for name, in permission_result.fetchall()]
+        raw_permissions = permission_result.fetchall()
+        
+        # 查询所有权限记录，用于获取真实的权限ID
+        all_permissions_query = select(Permission.id, Permission.name, Permission.display_name)
+        all_permissions_result = await db.execute(all_permissions_query)
+        all_permissions = {perm.name: {"id": perm.id, "display_name": perm.display_name} for perm in all_permissions_result.fetchall()}
+        
+        # 展开通配符权限
+        expanded_permission_names = set()
+        for perm in raw_permissions:
+            permission_name = perm.name
+            if permission_name == '*':
+                # 全部权限
+                expanded_permission_names.update(SYSTEM_PERMISSIONS.keys())
+            elif permission_name.endswith(':*'):
+                # 模块下的所有权限
+                module = permission_name[:-2]
+                for sys_perm in SYSTEM_PERMISSIONS.keys():
+                    if sys_perm.startswith(f"{module}:"):
+                        expanded_permission_names.add(sys_perm)
+            elif permission_name.startswith('*:'):
+                # 所有模块的特定操作
+                action = permission_name[2:]
+                for sys_perm in SYSTEM_PERMISSIONS.keys():
+                    if sys_perm.endswith(f":{action}"):
+                        expanded_permission_names.add(sys_perm)
+            else:
+                # 具体权限
+                expanded_permission_names.add(permission_name)
+        
+        # 构建权限响应数据，使用数据库中的真实ID
+        permissions_data = []
+        for perm_name in sorted(expanded_permission_names):
+            if perm_name in all_permissions:
+                permissions_data.append({
+                    "id": all_permissions[perm_name]["id"],  # 使用数据库中的真实ID
+                    "name": perm_name,
+                    "display_name": all_permissions[perm_name]["display_name"] or SYSTEM_PERMISSIONS.get(perm_name, perm_name)
+                })
+            elif perm_name in SYSTEM_PERMISSIONS:
+                # 如果数据库中没有该权限记录，但在系统权限定义中存在，则跳过或记录警告
+                logger.warning(f"Permission '{perm_name}' exists in SYSTEM_PERMISSIONS but not in database")
+                continue
+        
+        role_data['permissions'] = permissions_data
 
         return ResponseBuilder.success(
             data=role_data,
@@ -180,20 +228,67 @@ async def update_role(
             'is_system': bool(updated_role.is_system),
             'is_active': bool(updated_role.is_active),
             'sort_order': updated_role.sort_order,
+            'user_count': 0,  # 默认值，可以后续优化为实际查询
             'created_at': updated_role.created_at.isoformat() if updated_role.created_at else None,
             'updated_at': updated_role.updated_at.isoformat() if updated_role.updated_at else None,
         }
         
-        # 手动查询权限信息
+        # 手动查询权限信息并展开通配符权限
         from sqlalchemy import select
-        from app.models.role import RolePermission, Permission
+        from app.models.role import RolePermission, Permission, SYSTEM_PERMISSIONS
+        
+        # 查询角色的原始权限
         permission_query = (
-            select(Permission.name)
+            select(Permission.id, Permission.name, Permission.display_name)
             .join(RolePermission, Permission.id == RolePermission.permission_id)
             .where(RolePermission.role_id == updated_role.id)
         )
         permission_result = await db.execute(permission_query)
-        role_data['permissions'] = [name for name, in permission_result.fetchall()]
+        raw_permissions = permission_result.fetchall()
+        
+        # 查询所有权限记录，用于获取真实的权限ID
+        all_permissions_query = select(Permission.id, Permission.name, Permission.display_name)
+        all_permissions_result = await db.execute(all_permissions_query)
+        all_permissions = {perm.name: {"id": perm.id, "display_name": perm.display_name} for perm in all_permissions_result.fetchall()}
+        
+        # 展开通配符权限
+        expanded_permission_names = set()
+        for perm in raw_permissions:
+            permission_name = perm.name
+            if permission_name == '*':
+                # 全部权限
+                expanded_permission_names.update(SYSTEM_PERMISSIONS.keys())
+            elif permission_name.endswith(':*'):
+                # 模块下的所有权限
+                module = permission_name[:-2]
+                for sys_perm in SYSTEM_PERMISSIONS.keys():
+                    if sys_perm.startswith(f"{module}:"):
+                        expanded_permission_names.add(sys_perm)
+            elif permission_name.startswith('*:'):
+                # 所有模块的特定操作
+                action = permission_name[2:]
+                for sys_perm in SYSTEM_PERMISSIONS.keys():
+                    if sys_perm.endswith(f":{action}"):
+                        expanded_permission_names.add(sys_perm)
+            else:
+                # 具体权限
+                expanded_permission_names.add(permission_name)
+        
+        # 构建权限响应数据，使用数据库中的真实ID
+        permissions_data = []
+        for perm_name in sorted(expanded_permission_names):
+            if perm_name in all_permissions:
+                permissions_data.append({
+                    "id": all_permissions[perm_name]["id"],  # 使用数据库中的真实ID
+                    "name": perm_name,
+                    "display_name": all_permissions[perm_name]["display_name"] or SYSTEM_PERMISSIONS.get(perm_name, perm_name)
+                })
+            elif perm_name in SYSTEM_PERMISSIONS:
+                # 如果数据库中没有该权限记录，但在系统权限定义中存在，则跳过或记录警告
+                logger.warning(f"Permission '{perm_name}' exists in SYSTEM_PERMISSIONS but not in database")
+                continue
+        
+        role_data['permissions'] = permissions_data
 
         return ResponseBuilder.success(
             data=role_data,
