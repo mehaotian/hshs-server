@@ -156,6 +156,11 @@ class RoleUpdate(BaseModel):
         return v
 
 
+class RoleStatusUpdate(BaseModel):
+    """角色状态更新模型"""
+    is_active: bool = Field(..., description="是否激活")
+
+
 class PermissionSimple(BaseModel):
     """简化权限模型"""
     id: int
@@ -266,6 +271,7 @@ class RoleSearchQuery(BaseModel):
     is_system: Optional[bool] = Field(None, description="是否系统角色")
     has_users: Optional[bool] = Field(None, description="是否有用户")
     permission: Optional[str] = Field(None, description="包含特定权限")
+    status: Optional[int] = Field(None, ge=-1, le=1, description="角色状态（-1=全部，1=激活，0=禁用）")
     page: int = Field(1, ge=1, description="页码")
     page_size: int = Field(20, ge=1, le=100, description="每页数量")
     order_by: str = Field("sort_order", description="排序字段")

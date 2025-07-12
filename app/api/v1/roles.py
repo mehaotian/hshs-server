@@ -14,7 +14,8 @@ from ...schemas.role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleListResponse,
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
     UserRoleAssignment, UserRoleRemoval, RoleAssignmentBatch,
-    RoleSearchQuery, PermissionSearchQuery, RoleStatistics, PermissionSimple
+    RoleSearchQuery, PermissionSearchQuery, RoleStatistics, PermissionSimple,
+    RoleStatusUpdate
 )
 from app.services.role import RoleService
 
@@ -357,6 +358,7 @@ async def get_roles(
     is_system: Optional[bool] = Query(None, description="是否系统角色"),
     has_users: Optional[bool] = Query(None, description="是否有用户"),
     permission: Optional[str] = Query(None, description="包含特定权限"),
+    status: Optional[int] = Query(None, ge=-1, le=1, description="角色状态（-1=全部，0=禁用，1=激活）"),
     order_by: str = Query("sort_order", description="排序字段"),
     order_desc: bool = Query(True, description="是否降序"),
     db: AsyncSession = Depends(get_db),
@@ -370,6 +372,7 @@ async def get_roles(
             is_system=is_system,
             has_users=has_users,
             permission=permission,
+            status=status,
             page=page,
             page_size=size,
             order_by=order_by,
@@ -998,3 +1001,61 @@ async def init_system_roles(
     except Exception as e:
         logger.error(f"Failed to init system roles: {str(e)}")
         raise_business_error("系统初始化失败", 1000)
+
+
+# ==================== 角色状态管理 ====================
+
+@router.patch("/status/{role_id}", summary="更新角色状态")
+async def update_role_status(
+    role_id: int,
+    status_data: RoleStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("role:update"))
+):
+    """更新角色状态（激活/禁用）"""
+    try:
+        is_active = status_data.is_active
+        
+        role_service = RoleService(db)
+        
+        # 检查角色是否存在（预加载权限关系以避免懒加载问题）
+        role = await role_service.get_role_by_id_with_permissions(role_id)
+        if not role:
+            raise_not_found_resource("角色不存在")
+        
+        # 检查是否为系统角色，系统角色不允许禁用
+        if role.is_system and not is_active:
+            raise_business_error("系统角色不允许禁用", 1003)
+        
+        # 如果角色状态没有变化，直接返回
+        if role.is_active == is_active:
+            status_text = "激活" if is_active else "禁用"
+            return ResponseBuilder.success(
+                data=role.to_dict(),
+                message=f"角色已处于{status_text}状态"
+            )
+        
+        # 更新角色状态
+        updated_role = await role_service.update_role_status(
+            role_id=role_id,
+            is_active=is_active
+        )
+        
+        # 记录安全事件
+        event_type = "role_activated" if is_active else "role_deactivated"
+        log_security_event(
+            event_type,
+            user_id=current_user.id,
+            details=f"role_id: {role_id}, role_name: {role.name}, is_active: {is_active}"
+        )
+        
+        status_text = "激活" if is_active else "禁用"
+        return ResponseBuilder.success(
+            data=updated_role.to_dict(),
+            message=f"角色{status_text}成功"
+        )
+    except BaseCustomException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update role status {role_id}: {str(e)}")
+        raise_business_error("更新角色状态失败", 1000)

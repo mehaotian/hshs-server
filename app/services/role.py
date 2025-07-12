@@ -120,6 +120,15 @@ class RoleService:
         )
         return result.scalar_one_or_none()
     
+    async def get_role_by_id_with_permissions(self, role_id: int) -> Optional[Role]:
+        """根据ID获取角色（预加载权限关系）"""
+        result = await self.db.execute(
+            select(Role)
+            .options(selectinload(Role.role_permissions).selectinload(RolePermission.permission))
+            .where(Role.id == role_id)
+        )
+        return result.scalar_one_or_none()
+    
     async def get_role_by_name(self, name: str) -> Optional[Role]:
         """根据名称获取角色"""
         result = await self.db.execute(
@@ -213,6 +222,39 @@ class RoleService:
             
             raise_business_error("Failed to update role")
     
+    async def update_role_status(self, role_id: int, is_active: bool) -> Role:
+        """更新角色状态（激活/禁用）"""
+        role = await self.get_role_by_id(role_id)
+        if not role:
+            raise_not_found("Role", role_id)
+        
+        try:
+            # 更新角色状态
+            await self.db.execute(
+                update(Role)
+                .where(Role.id == role_id)
+                .values(is_active=is_active)
+            )
+            
+            await self.db.commit()
+            
+            # 重新获取更新后的角色，预加载权限关系以避免懒加载问题
+            result = await self.db.execute(
+                select(Role)
+                .options(selectinload(Role.role_permissions).selectinload(RolePermission.permission))
+                .where(Role.id == role_id)
+            )
+            updated_role = result.scalar_one()
+            
+            status_text = "激活" if is_active else "禁用"
+            logger.info(f"Role {status_text}: {role.name} (ID: {role_id})")
+            return updated_role
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to update role status {role_id}: {str(e)}")
+            raise_business_error("Failed to update role status")
+    
     async def delete_role(self, role_id: int) -> bool:
         """删除角色"""
         role = await self.get_role_by_id(role_id)
@@ -275,6 +317,10 @@ class RoleService:
                 if search_query.is_system is not None:
                     conditions.append(Role.is_system == search_query.is_system)
                 
+                # 状态过滤：-1表示查询全部，0表示禁用，1表示激活
+                if search_query.status is not None and search_query.status != -1:
+                    conditions.append(Role.is_active == search_query.status)
+                
                 # 支持按权限过滤 - 在JSON列中搜索
                 if search_query.permission:
                     # 使用JSON操作符搜索权限
@@ -290,7 +336,7 @@ class RoleService:
                         conditions.append(Role.user_roles.any())
                     else:
                         conditions.append(~Role.user_roles.any())
-            
+        
             return conditions
         
         # 应用搜索条件
