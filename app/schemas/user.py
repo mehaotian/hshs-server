@@ -123,6 +123,12 @@ class UserResponse(UserBase):
         }
 
 
+class RoleInfo(BaseModel):
+    """角色信息模型"""
+    name: str = Field(..., description="角色名称")
+    display_name: str = Field(..., description="角色显示名称")
+
+
 class UserListResponse(BaseModel):
     """用户列表响应模型"""
     id: int
@@ -133,7 +139,7 @@ class UserListResponse(BaseModel):
     status: UserStatus
     last_login_at: Optional[datetime]
     created_at: datetime
-    roles: List[str] = Field(default_factory=list, description="角色列表")
+    roles: List[RoleInfo] = Field(default_factory=list, description="角色列表")
     
     class Config:
         from_attributes = True

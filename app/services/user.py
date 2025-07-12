@@ -305,6 +305,28 @@ class UserService:
         result = await self.db.execute(query)
         users = result.scalars().all()
         
+        # 批量获取所有用户的角色信息
+        user_ids = [user.id for user in users]
+        user_roles_map = {}
+        
+        if user_ids:
+            # 查询所有用户的角色
+            roles_result = await self.db.execute(
+                select(UserRole.user_id, Role.name, Role.display_name)
+                .join(Role, UserRole.role_id == Role.id)
+                .where(UserRole.user_id.in_(user_ids))
+                .where(or_(UserRole.expires_at.is_(None), UserRole.expires_at > func.now()))
+            )
+            
+            # 组织角色数据
+            for user_id, role_name, role_display_name in roles_result:
+                if user_id not in user_roles_map:
+                    user_roles_map[user_id] = []
+                user_roles_map[user_id].append({
+                    "name": role_name,
+                    "display_name": role_display_name
+                })
+        
         # 转换为UserListResponse格式的字典
         user_list = []
         for user in users:
@@ -317,7 +339,7 @@ class UserService:
                 "status": user.status,
                 "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
-                "roles": []  # TODO: 需要加载用户角色
+                "roles": user_roles_map.get(user.id, [])
             }
             user_list.append(user_dict)
         
