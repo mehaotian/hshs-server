@@ -152,7 +152,7 @@ class Department(Base):
         data = {
             'id': self.id,
             'name': self.name,
-            'parent_id': self.parent_id,
+            'parent_id': self.parent_id if self.parent_id is not None else 0,  # 根节点返回0而不是null
             'manager_id': self.manager_id,
             'manager_name': self.manager_name,
             'manager_phone': self.manager_phone,

@@ -131,7 +131,7 @@ async def convert_to_simple_tree(dept, db) -> DepartmentTreeSimple:
     return DepartmentTreeSimple(
         id=dept.id,
         name=dept.name,
-        parent_id=dept.parent_id,
+        parent_id=dept.parent_id if dept.parent_id is not None else 0,  # 根节点返回0而不是null
         level=dept.level,
         sort_order=dept.sort_order,
         member_count=member_count,
@@ -139,21 +139,34 @@ async def convert_to_simple_tree(dept, db) -> DepartmentTreeSimple:
     )
 
 
-@router.get("/tree/list", response_model=List[DepartmentTreeSimple], summary="获取部门树形结构")
+@router.get("/tree/list", summary="获取部门树形结构")
 async def get_department_tree(
     root_id: Optional[int] = Query(None, description="根部门ID，不传则获取所有根部门"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取部门树（精简版，仅包含渲染必需字段）"""
-    service = DepartmentService(db)
-    departments = await service.get_department_tree(root_id)
-    result = []
-    for dept in departments:
-        # 转换为精简的树形结构
-        simple_tree = await convert_to_simple_tree(dept, db)
-        result.append(simple_tree)
-    return result
+    try:
+        service = DepartmentService(db)
+        departments = await service.get_department_tree(root_id)
+        result = []
+        for dept in departments:
+            # 转换为精简的树形结构
+            simple_tree = await convert_to_simple_tree(dept, db)
+            result.append(simple_tree.model_dump())
+        
+        return ResponseBuilder.success(
+            data=result,
+            message="获取部门树成功"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取部门树失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取部门树失败"
+        )
 
 
 @router.get("/statistics/list", summary="获取部门统计信息")
