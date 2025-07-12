@@ -50,8 +50,18 @@ class RoleService:
                 invalid_ids_str = ", ".join(map(str, sorted(invalid_permission_ids)))
                 raise_validation_error(f"无效的权限ID: {invalid_ids_str}。请检查这些权限ID是否存在。")
         
+        # 获取当前角色数量，设置 sort_order
+        role_count_result = await self.db.execute(
+            select(func.count(Role.id))
+        )
+        role_count = role_count_result.scalar() or 0
+        
         # 创建角色（排除permission_ids字段）
         role_dict = role_data.dict(exclude={'permission_ids'})
+        # 如果没有指定 sort_order，则根据当前数量自动设置
+        if 'sort_order' not in role_dict or role_dict['sort_order'] is None:
+            role_dict['sort_order'] = role_count + 1
+        
         role = Role(**role_dict)
         
         try:
@@ -297,10 +307,11 @@ class RoleService:
                 else:
                     query = query.order_by(order_column)
             else:
-                # 默认排序
-                query = query.order_by(Role.sort_order, Role.created_at)
+                # 默认排序：按 sort_order 倒序，最新创建的在前面
+                query = query.order_by(Role.sort_order.desc(), Role.created_at.desc())
         else:
-            query = query.order_by(Role.sort_order, Role.created_at)
+            # 默认排序：按 sort_order 倒序，最新创建的在前面
+            query = query.order_by(Role.sort_order.desc(), Role.created_at.desc())
         
         # 优化总数查询 - 使用相同的条件
         count_query = select(func.count(Role.id))

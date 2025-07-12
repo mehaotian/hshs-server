@@ -31,9 +31,18 @@ async def create_role(
 ):
     """创建新角色"""
     from app.core.exceptions import BaseCustomException
+    from pydantic import ValidationError as PydanticValidationError
 
     try:
+        # 在 Pydantic 验证失败时，先检查是否是重复名称问题
         role_service = RoleService(db)
+        
+        # 检查角色名是否已存在
+        existing_role = await role_service.get_role_by_name(role_input.name)
+        if existing_role:
+            from app.core.exceptions import raise_duplicate
+            raise_duplicate("Role", "name", role_input.name)
+        
         role = await role_service.create_role(role_input)
 
         log_security_event(
@@ -210,6 +219,16 @@ async def update_role(
 
     try:
         role_service = RoleService(db)
+        
+        # 如果要更新名称，检查角色名是否重复
+        if role_data.name:
+            current_role = await role_service.get_role_by_id(role_id)
+            if current_role and role_data.name != current_role.name:
+                existing_role = await role_service.get_role_by_name(role_data.name)
+                if existing_role:
+                    from app.core.exceptions import raise_duplicate
+                    raise_duplicate("Role", "name", role_data.name)
+        
         updated_role = await role_service.update_role(role_id, role_data)
 
         log_security_event(
@@ -339,7 +358,7 @@ async def get_roles(
     has_users: Optional[bool] = Query(None, description="是否有用户"),
     permission: Optional[str] = Query(None, description="包含特定权限"),
     order_by: str = Query("sort_order", description="排序字段"),
-    order_desc: bool = Query(False, description="是否降序"),
+    order_desc: bool = Query(True, description="是否降序"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:read"))
 ):

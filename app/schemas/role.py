@@ -121,10 +121,21 @@ class RoleBase(BaseModel):
         return v
 
 
-class RoleCreate(RoleBase):
+class RoleCreate(BaseModel):
     """创建角色模型"""
+    name: str = Field(..., max_length=50, description="角色名称")
+    display_name: str = Field(..., max_length=100, description="显示名称")
+    description: Optional[str] = Field(
+        None, max_length=500, description="角色描述")
+    sort_order: Optional[int] = Field(None, description="排序顺序")
     is_active: bool = Field(True, description="是否激活")
     permission_ids: List[int] = Field(default_factory=list, description="权限ID列表")
+
+    @validator('name')
+    def validate_name(cls, v):
+        if not v.replace('_', '').isalnum():
+            raise ValueError('角色名称只能包含字母、数字和下划线')
+        return v
 
 
 class RoleUpdate(BaseModel):
@@ -137,6 +148,12 @@ class RoleUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="是否激活")
     sort_order: Optional[int] = Field(None, description="排序顺序")
     permission_ids: Optional[List[int]] = Field(None, description="权限ID列表")
+
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None and not v.replace('_', '').isalnum():
+            raise ValueError('角色名称只能包含字母、数字和下划线')
+        return v
 
 
 class PermissionSimple(BaseModel):
@@ -252,7 +269,7 @@ class RoleSearchQuery(BaseModel):
     page: int = Field(1, ge=1, description="页码")
     page_size: int = Field(20, ge=1, le=100, description="每页数量")
     order_by: str = Field("sort_order", description="排序字段")
-    order_desc: bool = Field(False, description="是否降序")
+    order_desc: bool = Field(True, description="是否降序")
 
 
 class PermissionSearchQuery(BaseModel):
