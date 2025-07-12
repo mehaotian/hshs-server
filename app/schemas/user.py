@@ -22,6 +22,7 @@ class UserBase(BaseModel):
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
     bio: Optional[str] = Field(None, max_length=500, description="个人简介")
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
+    dept_id: Optional[int] = Field(None, description="部门ID，为空表示无部门")
     
     @validator('username')
     def validate_username(cls, v):
@@ -70,6 +71,7 @@ class UserUpdate(BaseModel):
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
     bio: Optional[str] = Field(None, max_length=500, description="个人简介")
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
+    dept_id: Optional[int] = Field(None, description="部门ID，为空表示无部门")
     settings: Optional[Dict[str, Any]] = Field(None, description="个人设置")
     
     @validator('phone')
@@ -105,6 +107,13 @@ class UserPasswordUpdate(BaseModel):
         return v
 
 
+class DepartmentInfo(BaseModel):
+    """部门信息模型"""
+    id: int = Field(..., description="部门ID")
+    name: str = Field(..., description="部门名称")
+    full_name: Optional[str] = Field(None, description="部门全名（包含层级）")
+
+
 class UserResponse(UserBase):
     """用户响应模型"""
     id: int
@@ -115,6 +124,7 @@ class UserResponse(UserBase):
     updated_at: datetime
     roles: List[str] = Field(default_factory=list, description="角色列表")
     permissions: List[str] = Field(default_factory=list, description="权限列表")
+    department: Optional[DepartmentInfo] = Field(None, description="部门信息")
     
     class Config:
         from_attributes = True
@@ -140,6 +150,7 @@ class UserListResponse(BaseModel):
     last_login_at: Optional[datetime]
     created_at: datetime
     roles: List[RoleInfo] = Field(default_factory=list, description="角色列表")
+    department: Optional[DepartmentInfo] = Field(None, description="部门信息")
     
     class Config:
         from_attributes = True

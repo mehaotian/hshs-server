@@ -39,14 +39,42 @@ class UserService:
         if existing_email:
             raise_duplicate("User", "email", user_data.email)
         
+        # 如果指定了部门，检查部门是否存在
+        if user_data.dept_id:
+            from app.models.department import Department
+            dept_result = await self.db.execute(
+                select(Department).where(
+                    and_(
+                        Department.id == user_data.dept_id,
+                        Department.status == Department.STATUS_ACTIVE
+                    )
+                )
+            )
+            department = dept_result.scalar_one_or_none()
+            if not department:
+                raise_not_found("Department", user_data.dept_id)
+        
         # 创建用户
-        user_dict = user_data.model_dump(exclude={"password", "confirm_password"})
+        user_dict = user_data.model_dump(exclude={"password", "confirm_password", "dept_id"})
         user_dict["password_hash"] = AuthManager.get_password_hash(user_data.password)
         
         user = User(**user_dict)
         
         try:
             self.db.add(user)
+            await self.db.flush()  # 获取用户ID但不提交事务
+            
+            # 如果指定了部门，创建部门成员关联
+            if user_data.dept_id:
+                from app.models.department import DepartmentMember, PositionType
+                dept_member = DepartmentMember(
+                    department_id=user_data.dept_id,
+                    user_id=user.id,
+                    position_type=PositionType.MEMBER,
+                    status=DepartmentMember.STATUS_ACTIVE
+                )
+                self.db.add(dept_member)
+            
             await self.db.commit()
             await self.db.refresh(user)
             
@@ -104,15 +132,61 @@ class UserService:
             if existing_email:
                 raise_duplicate("User", "email", user_data.email)
         
+        # 如果要更新部门，检查部门是否存在
+        if hasattr(user_data, 'dept_id') and user_data.dept_id is not None:
+            from app.models.department import Department
+            dept_result = await self.db.execute(
+                select(Department).where(
+                    and_(
+                        Department.id == user_data.dept_id,
+                        Department.status == Department.STATUS_ACTIVE
+                    )
+                )
+            )
+            department = dept_result.scalar_one_or_none()
+            if not department:
+                raise_not_found("Department", user_data.dept_id)
+        
         # 更新用户信息
-        update_data = user_data.model_dump(exclude_unset=True)
+        update_data = user_data.model_dump(exclude_unset=True, exclude={'dept_id'})
         
         try:
+            # 更新用户基本信息
             await self.db.execute(
                 update(User)
                 .where(User.id == user_id)
                 .values(**update_data)
             )
+            
+            # 处理部门更新
+            if hasattr(user_data, 'dept_id'):
+                from app.models.department import DepartmentMember, PositionType
+                
+                # 先删除现有的部门关联（设置为离职状态）
+                await self.db.execute(
+                    update(DepartmentMember)
+                    .where(
+                        and_(
+                            DepartmentMember.user_id == user_id,
+                            DepartmentMember.status == DepartmentMember.STATUS_ACTIVE
+                        )
+                    )
+                    .values(
+                        status=DepartmentMember.STATUS_INACTIVE,
+                        left_at=func.now()
+                    )
+                )
+                
+                # 如果指定了新部门，创建新的部门关联
+                if user_data.dept_id:
+                    dept_member = DepartmentMember(
+                        department_id=user_data.dept_id,
+                        user_id=user_id,
+                        position_type=PositionType.MEMBER,
+                        status=DepartmentMember.STATUS_ACTIVE
+                    )
+                    self.db.add(dept_member)
+            
             await self.db.commit()
             
             # 重新获取更新后的用户
@@ -305,9 +379,10 @@ class UserService:
         result = await self.db.execute(query)
         users = result.scalars().all()
         
-        # 批量获取所有用户的角色信息
+        # 批量获取所有用户的角色信息和部门信息
         user_ids = [user.id for user in users]
         user_roles_map = {}
+        user_departments_map = {}
         
         if user_ids:
             # 查询所有用户的角色
@@ -326,6 +401,31 @@ class UserService:
                     "name": role_name,
                     "display_name": role_display_name
                 })
+            
+            # 查询所有用户的部门信息
+            from app.models.department import Department
+            departments_result = await self.db.execute(
+                select(
+                    DepartmentMember.user_id,
+                    Department.id,
+                    Department.name
+                )
+                .join(Department, DepartmentMember.department_id == Department.id)
+                .where(
+                    and_(
+                        DepartmentMember.user_id.in_(user_ids),
+                        DepartmentMember.status == DepartmentMember.STATUS_ACTIVE,
+                        Department.status == Department.STATUS_ACTIVE
+                    )
+                )
+            )
+            
+            # 组织部门数据
+            for user_id, dept_id, dept_name in departments_result:
+                user_departments_map[user_id] = {
+                    "id": dept_id,
+                    "name": dept_name
+                }
         
         # 转换为UserListResponse格式的字典
         user_list = []
@@ -339,7 +439,8 @@ class UserService:
                 "status": user.status,
                 "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
-                "roles": user_roles_map.get(user.id, [])
+                "roles": user_roles_map.get(user.id, []),
+                "department": user_departments_map.get(user.id)
             }
             user_list.append(user_dict)
         
