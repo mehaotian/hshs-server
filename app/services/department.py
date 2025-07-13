@@ -122,7 +122,11 @@ class DepartmentService:
                 conditions.append(Department.name.ilike(f"%{query_params.name}%"))
             
             if query_params.parent_id is not None:
-                conditions.append(Department.parent_id == query_params.parent_id)
+                # 处理前端传入的parent_id=0的情况，0表示根部门，应该查询parent_id为NULL的记录
+                if query_params.parent_id == 0:
+                    conditions.append(Department.parent_id.is_(None))
+                else:
+                    conditions.append(Department.parent_id == query_params.parent_id)
             
             if query_params.manager_id:
                 conditions.append(Department.manager_id == query_params.manager_id)

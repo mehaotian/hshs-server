@@ -24,7 +24,7 @@ sys.path.insert(0, str(project_root))
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_async_session
+from app.core.database import AsyncSessionLocal
 from app.models.user import User
 from app.models.role import Role, Permission, RolePermission
 from app.models.department import Department
@@ -184,9 +184,7 @@ class DepartmentInitializer:
             level=1,
             path='/1/',
             sort_order=0,
-            status=Department.STATUS_ACTIVE,
-            created_by=admin_user_id,
-            updated_by=admin_user_id
+            status=Department.STATUS_ACTIVE
         )
         
         self.db.add(root_department)
@@ -238,9 +236,7 @@ class DepartmentInitializer:
                 parent_id=root_department.id,
                 level=2,
                 sort_order=dept_data['sort_order'],
-                status=Department.STATUS_ACTIVE,
-                created_by=admin_user_id,
-                updated_by=admin_user_id
+                status=Department.STATUS_ACTIVE
             )
             
             self.db.add(department)
@@ -291,7 +287,7 @@ async def main():
     """主函数"""
     try:
         # 获取数据库会话
-        async for db in get_async_session():
+        async with AsyncSessionLocal() as db:
             initializer = DepartmentInitializer(db)
             success = await initializer.run()
             
@@ -305,8 +301,6 @@ async def main():
             else:
                 print("\n❌ 部门管理系统初始化失败！")
                 sys.exit(1)
-            
-            break  # 只需要一个会话
             
     except Exception as e:
         logger.error(f"初始化脚本执行失败: {str(e)}")
