@@ -249,7 +249,7 @@ async def get_users(
     created_after: Optional[str] = Query(None, description="创建时间起始"),
     created_before: Optional[str] = Query(None, description="创建时间结束"),
     sort_by: Optional[str] = Query("created_at", description="排序字段"),
-    sort_order: Optional[str] = Query("asc", description="排序方向"),
+    sort_order: Optional[str] = Query("desc", description="排序方向"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("user:read"))
 ):
