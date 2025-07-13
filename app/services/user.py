@@ -387,17 +387,18 @@ class UserService:
         if user_ids:
             # 查询所有用户的角色
             roles_result = await self.db.execute(
-                select(UserRole.user_id, Role.name, Role.display_name)
+                select(UserRole.user_id, Role.id, Role.name, Role.display_name)
                 .join(Role, UserRole.role_id == Role.id)
                 .where(UserRole.user_id.in_(user_ids))
                 .where(or_(UserRole.expires_at.is_(None), UserRole.expires_at > func.now()))
             )
             
             # 组织角色数据
-            for user_id, role_name, role_display_name in roles_result:
+            for user_id, role_id, role_name, role_display_name in roles_result:
                 if user_id not in user_roles_map:
                     user_roles_map[user_id] = []
                 user_roles_map[user_id].append({
+                    "id": role_id,
                     "name": role_name,
                     "display_name": role_display_name
                 })
