@@ -98,7 +98,7 @@ class AuthManager:
             if payload.get("type") != token_type:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid token type",
+                    detail="令牌类型无效",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             
@@ -107,7 +107,7 @@ class AuthManager:
             if exp is None or datetime.fromtimestamp(exp) < datetime.utcnow():
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token expired",
+                    detail="登录已过期",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             
@@ -148,7 +148,7 @@ class AuthManager:
         except (ValueError, TypeError):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user ID in token",
+                detail="令牌中的用户ID无效",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -165,15 +165,30 @@ class AuthManager:
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
+                detail="用户不存在",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
         # 检查用户状态
         if not user.is_active:
+            # 根据用户状态返回更精确的错误信息
+            status_messages = {
+                User.STATUS_INACTIVE: "用户账户已被禁用",
+                User.STATUS_SUSPENDED: "用户账户已被暂停",
+                User.STATUS_DELETED: "用户账户已被删除"
+            }
+            detail_message = status_messages.get(user.status, "用户账户状态异常")
+            
+            # 记录详细的认证失败日志
+            from app.core.logger import logger
+            logger.warning(
+                f"User authentication failed - inactive user: {user.id} ({user.username}) - "
+                f"Status: {user.status} - Detail: {detail_message}"
+            )
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Inactive user",
+                detail=detail_message,
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -185,9 +200,17 @@ class AuthManager:
     ) -> User:
         """获取当前活跃用户"""
         if not current_user.is_active:
+            # 根据用户状态返回更精确的错误信息
+            status_messages = {
+                User.STATUS_INACTIVE: "用户账户已被禁用",
+                User.STATUS_SUSPENDED: "用户账户已被暂停",
+                User.STATUS_DELETED: "用户账户已被删除"
+            }
+            detail_message = status_messages.get(current_user.status, "用户账户状态异常")
+            
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Inactive user"
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail=detail_message
             )
         return current_user
     
@@ -262,7 +285,7 @@ class AuthManager:
             if not has_role:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Role '{role}' required"
+                    detail=f"需要'{role}'角色权限"
                 )
             
             return current_user

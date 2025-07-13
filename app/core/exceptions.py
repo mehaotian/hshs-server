@@ -285,7 +285,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     """HTTP异常处理器"""
     request_id = getattr(request.state, "request_id", None)
     
-    # 映射HTTP状态码到业务状态码和中文错误消息
+    # 映射HTTP状态码到业务状态码和默认错误消息
     status_code_mapping = {
         401: (2001, "未登录"),  # 未登录
         403: (2003, "权限不足"),  # 权限不足
@@ -296,10 +296,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         503: (1007, "服务暂不可用"),  # 服务暂不可用
     }
     
-    # 对于400状态码的业务异常，保留原始错误信息
-    if exc.status_code == 400:
-        business_code = 1001  # 业务逻辑错误
-        error_message = exc.detail  # 保留原始错误信息
+    # 对于400和401状态码，优先保留原始错误信息（如果是中文的话）
+    if exc.status_code in [400, 401]:
+        business_code, default_message = status_code_mapping.get(exc.status_code, (1000, "系统内部错误"))
+        # 如果原始错误信息包含中文字符，则使用原始信息，否则使用默认信息
+        if exc.detail and any('\u4e00' <= char <= '\u9fff' for char in exc.detail):
+            error_message = exc.detail  # 保留中文错误信息
+        else:
+            error_message = default_message  # 使用默认错误信息
     else:
         business_code, error_message = status_code_mapping.get(exc.status_code, (1000, "系统内部错误"))
     

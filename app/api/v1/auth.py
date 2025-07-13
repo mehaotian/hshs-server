@@ -142,7 +142,14 @@ async def login(
                 success=False,
                 ip="unknown"
             )
-            raise_business_error("用户账户已被禁用", 2004)
+            # 根据用户状态返回更精确的错误信息
+            status_messages = {
+                user.STATUS_INACTIVE: "用户账户已被禁用",
+                user.STATUS_SUSPENDED: "用户账户已被暂停", 
+                user.STATUS_DELETED: "用户账户已被删除"
+            }
+            detail_message = status_messages.get(user.status, "用户账户状态异常")
+            raise_business_error(detail_message, 2004)
         
         # 生成访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -195,6 +202,9 @@ async def login(
             data=login_data_response
         )
         
+    except BaseCustomException:
+        # 重新抛出业务异常，保持原有的错误信息
+        raise
     except Exception as e:
         logger.error(f"Login failed: {str(e)}")
         raise_business_error("登录失败，请稍后重试", 1000)
@@ -229,7 +239,14 @@ async def login_for_access_token(
                 success=False,
                 ip="unknown"
             )
-            raise_business_error("用户账户已被禁用", 2004)
+            # 根据用户状态返回更精确的错误信息
+            status_messages = {
+                user.STATUS_INACTIVE: "用户账户已被禁用",
+                user.STATUS_SUSPENDED: "用户账户已被暂停", 
+                user.STATUS_DELETED: "用户账户已被删除"
+            }
+            detail_message = status_messages.get(user.status, "用户账户状态异常")
+            raise_business_error(detail_message, 2004)
         
         # 生成访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -281,6 +298,9 @@ async def login_for_access_token(
             data=login_data_response
         )
         
+    except BaseCustomException:
+        # 重新抛出业务异常，保持原有的错误信息
+        raise
     except Exception as e:
         logger.error(f"Form login failed: {str(e)}")
         raise_business_error("登录失败，请稍后重试", 1000)
@@ -304,8 +324,18 @@ async def refresh_token(
         user_service = UserService(db)
         user = await user_service.get_user_by_id(user_id)
         
-        if not user or not user.is_active:
-            raise_business_error("用户不存在或已被禁用", 2001)
+        if not user:
+            raise_business_error("用户不存在", 2001)
+        
+        if not user.is_active:
+            # 根据用户状态返回更精确的错误信息
+            status_messages = {
+                user.STATUS_INACTIVE: "用户账户已被禁用",
+                user.STATUS_SUSPENDED: "用户账户已被暂停", 
+                user.STATUS_DELETED: "用户账户已被删除"
+            }
+            detail_message = status_messages.get(user.status, "用户账户状态异常")
+            raise_business_error(detail_message, 2004)
         
         # 生成新的访问令牌
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
