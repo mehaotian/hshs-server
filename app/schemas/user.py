@@ -29,7 +29,7 @@ class UserBase(BaseModel):
     phone: Optional[str] = Field(None, max_length=20, description="手机号")
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
     sex: Optional[SexType] = Field(None, description="性别")
-    bio: Optional[str] = Field(None, max_length=500, description="个人简介")
+    remark: Optional[str] = Field(None, max_length=500, description="备注")
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
     dept_id: Optional[int] = Field(None, description="部门ID，为空表示无部门")
     
@@ -109,7 +109,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20, description="手机号")
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
     sex: Optional[SexType] = Field(None, description="性别")
-    bio: Optional[str] = Field(None, max_length=500, description="个人简介")
+    remark: Optional[str] = Field(None, max_length=500, description="备注")
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
     dept_id: Optional[int] = Field(None, description="部门ID，为空表示无部门")
     settings: Optional[Dict[str, Any]] = Field(None, description="个人设置")
@@ -186,7 +186,9 @@ class UserListResponse(BaseModel):
     email: str
     real_name: Optional[str]
     phone: Optional[str] = Field(None, description="手机号")
+    wechat: Optional[str] = Field(None, description="微信号")
     sex: Optional[SexType] = Field(None, description="性别")
+    remark: Optional[str] = Field(None, description="备注")
     status: UserStatus
     last_login_at: Optional[datetime]
     created_at: datetime
