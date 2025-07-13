@@ -458,3 +458,16 @@ class RolePermissionBatch(BaseModel):
     """批量角色权限分配模型（向后兼容）"""
     role_id: int = Field(..., description="角色ID")
     permission_ids: List[int] = Field(..., min_items=1, description="权限ID列表")
+
+
+class UserRoleSync(BaseModel):
+    """用户角色同步模型 - 根据角色ID列表同步用户角色（增删）"""
+    user_id: int = Field(..., description="用户ID")
+    role_ids: List[int] = Field(..., description="角色ID列表（将同步为用户的完整角色列表）")
+    expires_at: Optional[datetime] = Field(None, description="过期时间")
+
+    @validator('expires_at')
+    def validate_expires_at(cls, v):
+        if v and v <= datetime.utcnow():
+            raise ValueError('过期时间必须大于当前时间')
+        return v

@@ -9,7 +9,7 @@ from app.models.user import User
 from app.schemas.role import (
     RoleCreate, RoleUpdate, PermissionCreate, PermissionUpdate,
     UserRoleCreate, UserRoleUpdate, RoleSearchQuery, PermissionSearchQuery,
-    RoleAssignmentBatch, PermissionCheck
+    RoleAssignmentBatch, PermissionCheck, UserRoleSync
 )
 from app.core.exceptions import (
     raise_not_found, raise_duplicate, raise_validation_error,
@@ -1324,6 +1324,99 @@ class RoleService:
             if "not found" in str(e).lower() or "权限ID不存在" in str(e):
                 raise
             raise_business_error("同步角色权限失败")
+    
+    async def sync_user_roles(self, user_id: int, role_ids: List[int], assigned_by: int, expires_at: Optional[datetime] = None) -> Dict[str, Any]:
+        """同步用户角色 - 根据角色ID列表同步用户角色（增删）"""
+        try:
+            # 验证用户是否存在
+            user_check_result = await self.db.execute(
+                select(User.id).where(User.id == user_id)
+            )
+            if not user_check_result.scalar_one_or_none():
+                raise_not_found("User", user_id)
+            
+            # 验证角色是否存在
+            if role_ids:
+                role_check_result = await self.db.execute(
+                    select(Role.id).where(Role.id.in_(role_ids))
+                )
+                existing_role_ids = set(role_check_result.scalars().all())
+                invalid_role_ids = set(role_ids) - existing_role_ids
+                
+                if invalid_role_ids:
+                    raise_validation_error(f"角色ID不存在: {list(invalid_role_ids)}")
+            
+            # 获取用户当前的角色
+            current_roles_result = await self.db.execute(
+                select(UserRole.role_id)
+                .where(UserRole.user_id == user_id)
+            )
+            current_role_ids = set(current_roles_result.scalars().all())
+            
+            # 计算需要添加和删除的角色
+            target_role_ids = set(role_ids)
+            roles_to_add = target_role_ids - current_role_ids
+            roles_to_remove = current_role_ids - target_role_ids
+            
+            added_count = 0
+            removed_count = 0
+            
+            # 删除不在目标列表中的角色
+            if roles_to_remove:
+                await self.db.execute(
+                    delete(UserRole).where(
+                        and_(
+                            UserRole.user_id == user_id,
+                            UserRole.role_id.in_(roles_to_remove)
+                        )
+                    )
+                )
+                removed_count = len(roles_to_remove)
+                logger.info(f"Removed {removed_count} roles from user {user_id}")
+            
+            # 添加新的角色
+            if roles_to_add:
+                current_time = datetime.utcnow()
+                new_user_roles = [
+                    {
+                        "user_id": user_id,
+                        "role_id": role_id,
+                        "assigned_by": assigned_by,
+                        "assigned_at": current_time,
+                        "expires_at": expires_at
+                    }
+                    for role_id in roles_to_add
+                ]
+                
+                await self.db.execute(
+                    insert(UserRole).values(new_user_roles)
+                )
+                added_count = len(roles_to_add)
+                logger.info(f"Added {added_count} roles to user {user_id}")
+            
+            await self.db.commit()
+            
+            logger.info(
+                f"User roles synced for user {user_id}: "
+                f"added {added_count}, removed {removed_count}"
+            )
+            
+            return {
+                "user_id": user_id,
+                "added_count": added_count,
+                "removed_count": removed_count,
+                "added_roles": list(roles_to_add),
+                "removed_roles": list(roles_to_remove),
+                "current_roles": role_ids,
+                "message": f"角色同步完成：新增 {added_count} 个，删除 {removed_count} 个"
+            }
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Sync user roles failed: {str(e)}")
+            if "not found" in str(e).lower() or "角色ID不存在" in str(e):
+                raise
+            raise_business_error("同步用户角色失败")
     
     async def initialize_system_data(self) -> bool:
         """初始化系统角色和权限数据"""

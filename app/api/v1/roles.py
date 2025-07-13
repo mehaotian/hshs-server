@@ -15,7 +15,7 @@ from ...schemas.role import (
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
     UserRoleAssignment, UserRoleRemoval, RoleAssignmentBatch,
     RoleSearchQuery, PermissionSearchQuery, RoleStatistics, PermissionSimple,
-    RoleStatusUpdate, RolePermissionBatch, RolePermissionSync
+    RoleStatusUpdate, RolePermissionBatch, RolePermissionSync, UserRoleSync
 )
 from app.services.role import RoleService
 
@@ -1127,3 +1127,49 @@ async def sync_role_permissions(
     except Exception as e:
         logger.error(f"Failed to sync role permissions: {str(e)}")
         raise_business_error("同步角色权限失败", 1000)
+
+
+@router.post("/user/roles/sync", summary="同步用户角色")
+async def sync_user_roles(
+    user_role_sync: UserRoleSync,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("role:assign"))
+):
+    """同步用户角色（完全替换用户的角色列表）"""
+    try:
+        role_service = RoleService(db)
+        
+        # 调用服务层方法进行角色同步
+        result = await role_service.sync_user_roles(
+            user_id=user_role_sync.user_id,
+            role_ids=user_role_sync.role_ids,
+            assigned_by=current_user.id,
+            expires_at=user_role_sync.expires_at
+        )
+        
+        # 记录安全事件
+        log_security_event(
+            "user_roles_synced",
+            user_id=current_user.id,
+            details=f"target_user_id: {user_role_sync.user_id}, "
+                   f"new_role_count: {len(user_role_sync.role_ids)}, "
+                   f"added_count: {result['added_count']}, "
+                   f"removed_count: {result['removed_count']}"
+        )
+        
+        # 构建响应消息
+        if result['added_count'] == 0 and result['removed_count'] == 0:
+            message = "角色同步完成，无变更"
+        else:
+            message = f"角色同步完成：新增 {result['added_count']} 个，移除 {result['removed_count']} 个"
+        
+        return ResponseBuilder.success(
+            data=result,
+            message=message
+        )
+        
+    except BaseCustomException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to sync user roles: {str(e)}")
+        raise_business_error("同步用户角色失败", 1000)
