@@ -309,6 +309,23 @@ class UserBatchOperation(BaseModel):
 class UserStatusUpdate(BaseModel):
     """用户状态更新模型"""
     status: UserStatus = Field(..., description="用户状态：1-启用，0-禁用，-1-暂停，-2-删除")
+    
+    @validator('status')
+    def validate_status(cls, v):
+        if v is None:
+            raise ValueError('用户状态不能为空')
+        if isinstance(v, UserStatus):
+            return v
+        try:
+            int_value = int(v)
+            if int_value in [1, 0, -1, -2]:
+                return UserStatus(int_value)
+            else:
+                raise ValueError(f'用户状态值必须是：1（启用）、0（禁用）、-1（暂停）、-2（删除）中的一个，当前输入值：{v}')
+        except (ValueError, TypeError) as e:
+            if '状态值2无效' in str(e) or '用户状态值必须是' in str(e):
+                raise e
+            raise ValueError(f'用户状态值必须是：1（启用）、0（禁用）、-1（暂停）、-2（删除）中的一个，当前输入值：{v}')
 
 
 class UserStatistics(BaseModel):
