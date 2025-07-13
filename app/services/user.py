@@ -275,18 +275,35 @@ class UserService:
             raise_not_found("User", user_id)
         
         try:
+            # 1. 删除用户的部门成员关系
+            await self.db.execute(
+                delete(DepartmentMember).where(DepartmentMember.user_id == user_id)
+            )
+            
+            # 2. 删除用户的角色关系
+            await self.db.execute(
+                delete(UserRole).where(UserRole.user_id == user_id)
+            )
+            
+            # 3. 删除用户档案（如果存在）
+            await self.db.execute(
+                delete(UserProfile).where(UserProfile.user_id == user_id)
+            )
+            
+            # 4. 最后删除用户本身
             await self.db.execute(
                 delete(User).where(User.id == user_id)
             )
+            
             await self.db.commit()
             
-            logger.info(f"User deleted: {user.username} (ID: {user_id})")
+            logger.info(f"User deleted: {user.username} (ID: {user_id}) with all related data")
             return True
             
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Failed to delete user {user_id}: {str(e)}")
-            raise_business_error("Failed to delete user")
+            raise_business_error("删除用户失败")
     
     async def get_users(
         self, 
