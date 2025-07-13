@@ -283,6 +283,10 @@ class UserService:
                 phone_pattern = f"%{search_query.phone}%"
                 conditions.append(User.phone.ilike(phone_pattern))
             
+            # 性别筛选
+            if search_query.sex:
+                conditions.append(User.sex == search_query.sex.value)
+            
             # 用户状态
             if search_query.status is not None:
                 conditions.append(User.status == search_query.status)
@@ -344,6 +348,10 @@ class UserService:
             if search_query.phone:
                 phone_pattern = f"%{search_query.phone}%"
                 conditions.append(User.phone.ilike(phone_pattern))
+            
+            # 性别筛选
+            if search_query.sex:
+                conditions.append(User.sex == search_query.sex.value)
             
             # 用户状态
             if search_query.status is not None:
@@ -437,6 +445,7 @@ class UserService:
                 "email": user.email,
                 "real_name": user.real_name,
                 "phone": user.phone,
+                "sex": user.sex,
                 "status": user.status,
                 "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
                 "created_at": user.created_at.isoformat() if user.created_at else None,

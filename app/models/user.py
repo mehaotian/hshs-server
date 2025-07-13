@@ -26,6 +26,7 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True, comment="头像URL")
     phone = Column(String(20), nullable=True, comment="手机号码")
     wechat = Column(String(100), nullable=True, comment="微信号")
+    sex = Column(Integer, nullable=True, comment="性别：1-男，2-女，0-其他/未知")
     bio = Column(Text, nullable=True, comment="个人简介")
     status = Column(Integer, default=1, comment="用户状态：1-启用，0-禁用")
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
@@ -206,6 +207,7 @@ class User(Base):
             'avatar_url': self.avatar_url,
             'phone': self.phone,
             'wechat': self.wechat,
+            'sex': self.sex,
             'bio': self.bio,
             'status': self.status,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
@@ -239,6 +241,7 @@ class User(Base):
             'avatar_url': self.avatar_url,
             'phone': self.phone,
             'wechat': self.wechat,
+            'sex': self.sex,
             'bio': self.bio,
             'status': self.status,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,

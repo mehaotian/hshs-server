@@ -211,6 +211,7 @@ async def get_users(
     keyword: Optional[str] = Query(None, description="关键词搜索（用户名、邮箱、真实姓名）"),
     username: Optional[str] = Query(None, description="用户名（精确匹配）"),
     phone: Optional[str] = Query(None, description="手机号码（模糊匹配）"),
+    sex: Optional[int] = Query(None, description="性别：1-男，2-女，0-其他/未知"),
     status: Optional[str] = Query(None, description="用户状态"),
     dept_id: Optional[str] = Query(None, description="部门ID"),
     role_id: Optional[str] = Query(None, description="角色ID"),
@@ -235,10 +236,17 @@ async def get_users(
                 # 如果不是有效的整数字符串，忽略该参数
                 pass
         
+        # 处理性别参数
+        sex_filter = None
+        if sex is not None and sex in [0, 1, 2]:
+            from app.schemas.user import SexType
+            sex_filter = SexType(sex)
+        
         search_query = UserSearchQuery(
             keyword=keyword,
             username=username,
             phone=phone,
+            sex=sex_filter,
             status=int(status) if status and status.isdigit() else None,
             dept_id=int(dept_id) if dept_id and dept_id.isdigit() else None,
             role=role_filter,

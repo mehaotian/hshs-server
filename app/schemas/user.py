@@ -1,8 +1,33 @@
 import email
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, EmailStr, Field, validator, field_validator
+from pydantic_core import core_schema
+from typing import Optional, List, Dict, Any, Annotated
 from datetime import datetime
 from enum import Enum
+
+
+class SexType(int, Enum):
+    """性别类型枚举"""
+    MALE = 1      # 男性
+    FEMALE = 2    # 女性
+    OTHER = 0     # 其他/未知
+    
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        """Pydantic v2 自定义验证器"""
+        def validate_sex(value):
+            if value is None:
+                return value
+            if isinstance(value, cls):
+                return value
+            if isinstance(value, int) and value in [0, 1, 2]:
+                return cls(value)
+            raise ValueError(f'性别值无效，请输入：0（其他/未知）、1（男性）或 2（女性），当前输入值：{value}')
+        
+        return core_schema.no_info_plain_validator_function(
+            validate_sex,
+            serialization=core_schema.to_string_ser_schema()
+        )
 
 
 class UserStatus(int, Enum):
@@ -20,6 +45,7 @@ class UserBase(BaseModel):
     real_name: Optional[str] = Field(None, max_length=50, description="真实姓名")
     phone: Optional[str] = Field(None, max_length=20, description="手机号")
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
+    sex: Optional[SexType] = Field(None, description="性别")
     bio: Optional[str] = Field(None, max_length=500, description="个人简介")
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
     dept_id: Optional[int] = Field(None, description="部门ID，为空表示无部门")
@@ -69,6 +95,7 @@ class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
     phone: Optional[str] = Field(None, max_length=20, description="手机号")
     wechat: Optional[str] = Field(None, max_length=50, description="微信号")
+    sex: Optional[SexType] = Field(None, description="性别")
     bio: Optional[str] = Field(None, max_length=500, description="个人简介")
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL")
     dept_id: Optional[int] = Field(None, description="部门ID，为空表示无部门")
@@ -146,6 +173,7 @@ class UserListResponse(BaseModel):
     email: str
     real_name: Optional[str]
     phone: Optional[str] = Field(None, description="手机号")
+    sex: Optional[SexType] = Field(None, description="性别")
     status: UserStatus
     last_login_at: Optional[datetime]
     created_at: datetime
@@ -237,6 +265,7 @@ class UserSearchQuery(BaseModel):
     keyword: Optional[str] = Field(None, description="关键词搜索（用户名、邮箱、真实姓名）")
     username: Optional[str] = Field(None, description="真实姓名（模糊匹配）")
     phone: Optional[str] = Field(None, description="手机号码（模糊匹配）")
+    sex: Optional[SexType] = Field(None, description="性别")
     status: Optional[int] = Field(None, description="用户状态")
     dept_id: Optional[int] = Field(None, description="部门ID")
     role: Optional[str] = Field(None, description="角色名称")
