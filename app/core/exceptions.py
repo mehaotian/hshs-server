@@ -647,12 +647,21 @@ async def general_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", None)
     
     # 记录异常日志
-    logger.error(
-        f"Unhandled Exception: {type(exc).__name__} - {str(exc)} - "
-        f"Path: {request.url.path} - Method: {request.method} - "
-        f"Request ID: {request_id}\n{traceback.format_exc()}",
-        extra={"exception": exc, "request_id": request_id}
-    )
+    try:
+        error_msg = str(exc).replace("{", "[").replace("}", "]")
+        logger.error(
+            f"Unhandled Exception: {type(exc).__name__} - {error_msg} - "
+            f"Path: {request.url.path} - Method: {request.method} - "
+            f"Request ID: {request_id}\n{traceback.format_exc()}",
+            extra={"exception": exc, "request_id": request_id}
+        )
+    except Exception as log_error:
+        logger.error(
+            f"Unhandled Exception: {type(exc).__name__} - [Log formatting error] - "
+            f"Path: {request.url.path} - Method: {request.method} - "
+            f"Request ID: {request_id}",
+            extra={"request_id": request_id}
+        )
     
     return JSONResponse(
         status_code=200,

@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
         title=settings.PROJECT_NAME,
         description=settings.PROJECT_DESCRIPTION,
         version=settings.PROJECT_VERSION,
+        openapi_version="3.1.0",  # 显式设置 OpenAPI 版本
         openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
         docs_url="/docs" if settings.DEBUG else None,  # Swagger UI 文档
         redoc_url="/redoc" if settings.DEBUG else None,  # ReDoc 文档

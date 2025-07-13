@@ -18,7 +18,7 @@ from app.schemas.user import (
     UserCreate, UserUpdate, UserResponse, UserListResponse,
     UserProfileCreate, UserProfileUpdate, UserProfileResponse,
     UserPasswordUpdate, PasswordChange, UserSearchQuery, UserBatchOperation,
-    UserStatistics
+    UserStatistics, UserStatusUpdate
 )
 from app.services.user import UserService
 
@@ -177,6 +177,37 @@ async def update_user(
     except Exception as e:
         logger.error(f"Failed to update user: {str(e)}")
         raise_business_error("更新用户信息失败", 1000)
+
+
+@router.patch("/status/{user_id}", summary="更新用户状态")
+async def update_user_status(
+    user_id: int,
+    status_data: UserStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("user:update"))
+):
+    """更新用户状态"""
+    try:
+        user_service = UserService(db)
+        user = await user_service.update_user_status(user_id, status_data.status.value)
+        
+        log_security_event(
+            "user_status_updated",
+            user_id=current_user.id,
+            details=f"target_user_id: {user_id}, new_status: {status_data.status.value}"
+        )
+        
+        return ResponseBuilder.success(
+            data={
+                "id": user.id,
+                "username": user.username,
+                "status": user.status
+            },
+            message="用户状态更新成功"
+        )
+    except Exception as e:
+        logger.error(f"Failed to update user status: {str(e)}")
+        raise_server_error("更新用户状态失败")
 
 
 @router.delete("/delete/{user_id}", summary="删除用户")

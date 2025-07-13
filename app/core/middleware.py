@@ -72,11 +72,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             process_time = time.time() - start_time
             
             # 记录异常
-            logger.error(
-                f"Request failed: {request.method} {request.url.path} - "
-                f"Error: {str(e)} - Duration: {process_time:.3f}s - IP: {client_ip}",
-                extra={"request_id": getattr(request.state, "request_id", None)}
-            )
+            try:
+                error_msg = str(e).replace("{", "[").replace("}", "]")
+                logger.error(
+                    f"Request failed: {request.method} {request.url.path} - "
+                    f"Error: {error_msg} - Duration: {process_time:.3f}s - IP: {client_ip}",
+                    extra={"request_id": getattr(request.state, "request_id", None)}
+                )
+            except Exception as log_error:
+                logger.error(
+                    f"Request failed: {request.method} {request.url.path} - "
+                    f"Error: [Log formatting error] - Duration: {process_time:.3f}s - IP: {client_ip}",
+                    extra={"request_id": getattr(request.state, "request_id", None)}
+                )
             
             raise
     

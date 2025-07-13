@@ -11,23 +11,6 @@ class SexType(int, Enum):
     MALE = 1      # 男性
     FEMALE = 2    # 女性
     OTHER = 0     # 其他/未知
-    
-    @classmethod
-    def __get_pydantic_core_schema__(cls, source_type, handler):
-        """Pydantic v2 自定义验证器"""
-        def validate_sex(value):
-            if value is None:
-                return value
-            if isinstance(value, cls):
-                return value
-            if isinstance(value, int) and value in [0, 1, 2]:
-                return cls(value)
-            raise ValueError(f'性别值无效，请输入：0（其他/未知）、1（男性）或 2（女性），当前输入值：{value}')
-        
-        return core_schema.no_info_plain_validator_function(
-            validate_sex,
-            serialization=core_schema.to_string_ser_schema()
-        )
 
 
 class UserStatus(int, Enum):
@@ -60,6 +43,36 @@ class UserBase(BaseModel):
     def validate_phone(cls, v):
         if v and not v.replace('+', '').replace('-', '').replace(' ', '').isdigit():
             raise ValueError('手机号格式不正确')
+        return v
+    
+    @validator('sex')
+    def validate_sex(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, SexType):
+            return v
+        try:
+            int_value = int(v)
+            if int_value in [0, 1, 2]:
+                return SexType(int_value)
+            raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
+        except (ValueError, TypeError):
+            raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
+        return v
+    
+    @validator('sex')
+    def validate_sex(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, SexType):
+            return v
+        try:
+            int_value = int(v)
+            if int_value in [0, 1, 2]:
+                return SexType(int_value)
+            raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
+        except (ValueError, TypeError):
+            raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
         return v
 
 
@@ -293,8 +306,13 @@ class UserBatchOperation(BaseModel):
         return v
 
 
+class UserStatusUpdate(BaseModel):
+    """用户状态更新模型"""
+    status: UserStatus = Field(..., description="用户状态：1-启用，0-禁用，-1-暂停，-2-删除")
+
+
 class UserStatistics(BaseModel):
-    """用户统计模型"""
+    """用户统计信息模型"""
     total_users: int
     active_users: int
     inactive_users: int

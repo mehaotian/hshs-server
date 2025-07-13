@@ -229,6 +229,45 @@ class UserService:
             logger.error(f"Failed to update password for user {user_id}: {str(e)}")
             raise_business_error("Failed to update password")
     
+    async def update_user_status(self, user_id: int, status: int) -> User:
+        """更新用户状态（启用/禁用/暂停/删除）"""
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            raise_not_found("User", user_id)
+        
+        try:
+            # 更新用户状态
+            await self.db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(status=status)
+            )
+            
+            await self.db.commit()
+            
+            # 重新获取更新后的用户
+            result = await self.db.execute(
+                select(User)
+                .options(selectinload(User.profile))
+                .where(User.id == user_id)
+            )
+            updated_user = result.scalar_one()
+            
+            status_map = {
+                1: "启用",
+                0: "禁用", 
+                -1: "暂停",
+                -2: "删除"
+            }
+            status_text = status_map.get(status, "未知")
+            logger.info(f"User {status_text}: {user.username} (ID: {user_id})")
+            return updated_user
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to update user status {user_id}: {str(e)}")
+            raise_business_error("Failed to update user status")
+    
     async def delete_user(self, user_id: int) -> bool:
         """删除用户"""
         user = await self.get_user_by_id(user_id)
