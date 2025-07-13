@@ -15,7 +15,7 @@ from ...schemas.role import (
     PermissionCreate, PermissionUpdate, PermissionResponse, PermissionListResponse,
     UserRoleAssignment, UserRoleRemoval, RoleAssignmentBatch,
     RoleSearchQuery, PermissionSearchQuery, RoleStatistics, PermissionSimple,
-    RoleStatusUpdate
+    RoleStatusUpdate, RolePermissionBatch, RolePermissionSync
 )
 from app.services.role import RoleService
 
@@ -1012,50 +1012,118 @@ async def update_role_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("role:update"))
 ):
-    """更新角色状态（激活/禁用）"""
+    """更新角色状态"""
     try:
-        is_active = status_data.is_active
+        role_service = RoleService(db)
+        role = await role_service.update_role_status(role_id, status_data.is_active)
         
+        log_security_event(
+            "role_status_updated",
+            user_id=current_user.id,
+            details=f"role_id: {role_id}, new_status: {status_data.is_active}"
+        )
+        
+        return ResponseBuilder.success(
+            data={
+                "id": role.id,
+                "name": role.name,
+                "is_active": bool(role.is_active)
+            },
+            message="角色状态更新成功"
+        )
+    except Exception as e:
+        logger.error(f"Failed to update role status: {str(e)}")
+        raise_server_error("更新角色状态失败")
+
+
+@router.post("/permissions/batch", summary="批量分配权限给角色（增量模式）")
+async def batch_assign_permissions_to_role(
+    permission_batch: RolePermissionBatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("role:update"))
+):
+    """批量分配权限给角色（增量模式，只添加不删除）"""
+    try:
         role_service = RoleService(db)
         
-        # 检查角色是否存在（预加载权限关系以避免懒加载问题）
-        role = await role_service.get_role_by_id_with_permissions(role_id)
-        if not role:
-            raise_not_found_resource("角色不存在")
-        
-        # 检查是否为系统角色，系统角色不允许禁用
-        if role.is_system and not is_active:
-            raise_business_error("系统角色不允许禁用", 1003)
-        
-        # 如果角色状态没有变化，直接返回
-        if role.is_active == is_active:
-            status_text = "激活" if is_active else "禁用"
-            return ResponseBuilder.success(
-                data=role.to_dict(),
-                message=f"角色已处于{status_text}状态"
-            )
-        
-        # 更新角色状态
-        updated_role = await role_service.update_role_status(
-            role_id=role_id,
-            is_active=is_active
+        # 调用服务层方法进行批量分配
+        result = await role_service.batch_assign_permissions_to_role(
+            role_id=permission_batch.role_id,
+            permission_ids=permission_batch.permission_ids
         )
         
         # 记录安全事件
-        event_type = "role_activated" if is_active else "role_deactivated"
         log_security_event(
-            event_type,
+            "role_permissions_batch_assigned",
             user_id=current_user.id,
-            details=f"role_id: {role_id}, role_name: {role.name}, is_active: {is_active}"
+            details=f"role_id: {permission_batch.role_id}, "
+                   f"total_permissions: {result['total_permissions']}, "
+                   f"success_count: {result['success_count']}, "
+                   f"failed_count: {result['failed_count']}"
         )
         
-        status_text = "激活" if is_active else "禁用"
+        # 构建响应消息
+        if result['failed_count'] == 0:
+            if result['success_count'] == 0:
+                message = "所有权限已存在，无需重复分配"
+            else:
+                message = f"成功分配 {result['success_count']} 个权限给角色"
+        else:
+            message = (f"批量分配完成：成功 {result['success_count']} 个，"
+                      f"跳过 {result['skipped_count']} 个，"
+                      f"失败 {result['failed_count']} 个")
+        
         return ResponseBuilder.success(
-            data=updated_role.to_dict(),
-            message=f"角色{status_text}成功"
+            data=result,
+            message=message
         )
+        
     except BaseCustomException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update role status {role_id}: {str(e)}")
-        raise_business_error("更新角色状态失败", 1000)
+        logger.error(f"Failed to batch assign permissions to role: {str(e)}")
+        raise_business_error("批量分配权限给角色失败", 1000)
+
+
+@router.post("/permissions/sync", summary="同步角色权限")
+async def sync_role_permissions(
+    permission_sync: RolePermissionSync,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("role:update"))
+):
+    """同步角色权限（完全替换角色的权限列表）"""
+    try:
+        role_service = RoleService(db)
+        
+        # 调用服务层方法进行权限同步
+        result = await role_service.sync_role_permissions(
+            role_id=permission_sync.role_id,
+            permission_ids=permission_sync.permission_ids
+        )
+        
+        # 记录安全事件
+        log_security_event(
+            "role_permissions_synced",
+            user_id=current_user.id,
+            details=f"role_id: {permission_sync.role_id}, "
+                   f"new_permission_count: {len(permission_sync.permission_ids)}, "
+                   f"added_count: {result['added_count']}, "
+                   f"removed_count: {result['removed_count']}"
+        )
+        
+        # 构建响应消息
+        if result['added_count'] == 0 and result['removed_count'] == 0:
+            message = "权限同步完成，无变更"
+        else:
+            message = f"权限同步完成：新增 {result['added_count']} 个，移除 {result['removed_count']} 个"
+        
+        return ResponseBuilder.success(
+            data=result,
+            message=message
+        )
+        
+    except BaseCustomException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to sync role permissions: {str(e)}")
+        raise_business_error("同步角色权限失败", 1000)

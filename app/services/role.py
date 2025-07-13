@@ -1158,6 +1158,173 @@ class RoleService:
             "role_assignments": role_assignments
         }
     
+    async def batch_assign_permissions_to_role(self, role_id: int, permission_ids: List[int]) -> Dict[str, Any]:
+        """批量分配权限给角色"""
+        try:
+            # 验证角色是否存在
+            role = await self.get_role_by_id(role_id)
+            if not role:
+                raise_not_found("Role", role_id)
+            
+            # 验证权限是否存在
+            valid_permission_ids = []
+            invalid_permission_ids = []
+            
+            for permission_id in permission_ids:
+                permission = await self.get_permission_by_id(permission_id)
+                if permission:
+                    valid_permission_ids.append(permission_id)
+                else:
+                    invalid_permission_ids.append(permission_id)
+            
+            # 检查已存在的角色权限关联
+            existing_role_permissions_result = await self.db.execute(
+                select(RolePermission.permission_id)
+                .where(
+                    and_(
+                        RolePermission.role_id == role_id,
+                        RolePermission.permission_id.in_(valid_permission_ids)
+                    )
+                )
+            )
+            existing_permission_ids = [row[0] for row in existing_role_permissions_result.all()]
+            
+            # 过滤出需要新增的权限
+            new_permission_ids = [pid for pid in valid_permission_ids if pid not in existing_permission_ids]
+            
+            # 批量创建角色权限关联
+            if new_permission_ids:
+                role_permissions_data = [
+                    {
+                        "role_id": role_id,
+                        "permission_id": permission_id,
+                        "created_at": datetime.utcnow()
+                    }
+                    for permission_id in new_permission_ids
+                ]
+                
+                await self.db.execute(
+                    insert(RolePermission).values(role_permissions_data)
+                )
+            
+            await self.db.commit()
+            
+            # 构建返回结果
+            result = {
+                "role_id": role_id,
+                "total_permissions": len(permission_ids),
+                "success_count": len(new_permission_ids),
+                "skipped_count": len(existing_permission_ids),
+                "failed_count": len(invalid_permission_ids),
+                "new_permission_ids": new_permission_ids,
+                "existing_permission_ids": existing_permission_ids,
+                "invalid_permission_ids": invalid_permission_ids
+            }
+            
+            logger.info(
+                f"Batch permission assignment to role {role_id} completed: "
+                f"{result['success_count']} new, {result['skipped_count']} skipped, "
+                f"{result['failed_count']} failed"
+            )
+            
+            return result
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Batch permission assignment to role failed: {str(e)}")
+            if "not found" in str(e).lower():
+                raise
+            raise_business_error("批量分配权限给角色失败")
+    
+    async def sync_role_permissions(self, role_id: int, permission_ids: List[int]) -> Dict[str, Any]:
+        """同步角色权限 - 根据权限ID列表同步角色权限（增删）"""
+        try:
+            # 验证角色是否存在
+            role = await self.get_role_by_id(role_id)
+            if not role:
+                raise_not_found("Role", role_id)
+            
+            # 验证权限是否存在
+            if permission_ids:
+                permission_check_result = await self.db.execute(
+                    select(Permission.id).where(Permission.id.in_(permission_ids))
+                )
+                existing_permission_ids = set(permission_check_result.scalars().all())
+                invalid_permission_ids = set(permission_ids) - existing_permission_ids
+                
+                if invalid_permission_ids:
+                    raise_validation_error(f"权限ID不存在: {list(invalid_permission_ids)}")
+            
+            # 获取角色当前的权限
+            current_permissions_result = await self.db.execute(
+                select(RolePermission.permission_id)
+                .where(RolePermission.role_id == role_id)
+            )
+            current_permission_ids = set(current_permissions_result.scalars().all())
+            
+            # 计算需要添加和删除的权限
+            target_permission_ids = set(permission_ids)
+            permissions_to_add = target_permission_ids - current_permission_ids
+            permissions_to_remove = current_permission_ids - target_permission_ids
+            
+            added_count = 0
+            removed_count = 0
+            
+            # 删除不在目标列表中的权限
+            if permissions_to_remove:
+                await self.db.execute(
+                    delete(RolePermission).where(
+                        and_(
+                            RolePermission.role_id == role_id,
+                            RolePermission.permission_id.in_(permissions_to_remove)
+                        )
+                    )
+                )
+                removed_count = len(permissions_to_remove)
+                logger.info(f"Removed {removed_count} permissions from role {role_id}")
+            
+            # 添加新的权限
+            if permissions_to_add:
+                current_time = datetime.utcnow()
+                new_role_permissions = [
+                    {
+                        "role_id": role_id,
+                        "permission_id": permission_id,
+                        "created_at": current_time
+                    }
+                    for permission_id in permissions_to_add
+                ]
+                
+                await self.db.execute(
+                    insert(RolePermission).values(new_role_permissions)
+                )
+                added_count = len(permissions_to_add)
+                logger.info(f"Added {added_count} permissions to role {role_id}")
+            
+            await self.db.commit()
+            
+            logger.info(
+                f"Role permissions synced for role {role_id}: "
+                f"added {added_count}, removed {removed_count}"
+            )
+            
+            return {
+                "role_id": role_id,
+                "added_count": added_count,
+                "removed_count": removed_count,
+                "added_permissions": list(permissions_to_add),
+                "removed_permissions": list(permissions_to_remove),
+                "current_permissions": permission_ids,
+                "message": f"权限同步完成：新增 {added_count} 个，删除 {removed_count} 个"
+            }
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Sync role permissions failed: {str(e)}")
+            if "not found" in str(e).lower() or "权限ID不存在" in str(e):
+                raise
+            raise_business_error("同步角色权限失败")
+    
     async def initialize_system_data(self) -> bool:
         """初始化系统角色和权限数据"""
         try:
