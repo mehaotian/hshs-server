@@ -59,21 +59,6 @@ class UserBase(BaseModel):
         except (ValueError, TypeError):
             raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
         return v
-    
-    @validator('sex')
-    def validate_sex(cls, v):
-        if v is None:
-            return v
-        if isinstance(v, SexType):
-            return v
-        try:
-            int_value = int(v)
-            if int_value in [0, 1, 2]:
-                return SexType(int_value)
-            raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
-        except (ValueError, TypeError):
-            raise ValueError(f'性别值必须是 0（其他/未知）、1（男性）或 2（女性）中的一个，当前输入值：{v}')
-        return v
 
 
 class UserCreate(UserBase):
