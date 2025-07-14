@@ -1073,11 +1073,11 @@ class RoleService:
         return users, total
     
     async def check_user_permission(self, user_id: int, permission_name: str) -> bool:
-        """检查用户是否有指定权限（支持通配符匹配）"""
+        """检查用户是否有指定权限"""
         # 获取用户角色
         user_roles = await self.get_user_roles(user_id)
         
-        # 检查每个角色的权限（现在支持通配符匹配）
+        # 检查每个角色的权限
         for role in user_roles:
             if role.has_permission(permission_name):
                 return True

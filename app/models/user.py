@@ -126,7 +126,7 @@ class User(Base):
         return list(permissions)
     
     async def has_permission(self, permission: str, db=None) -> bool:
-        """检查用户是否拥有指定权限（支持通配符匹配）"""
+        """检查用户是否拥有指定权限"""
         if db is None:
             # 如果没有传入db会话，尝试从已加载的关系中获取
             try:

@@ -921,7 +921,7 @@ async def get_user_permissions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("permission:read"))
 ):
-    """获取指定用户的所有权限（包括通配符权限）"""
+    """获取指定用户的所有权限"""
     try:
         role_service = RoleService(db)
         permissions = await role_service.get_user_permissions(user_id)

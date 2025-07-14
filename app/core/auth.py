@@ -245,9 +245,13 @@ class AuthManager:
         resource_id: Optional[int] = None
     ) -> bool:
         """检查用户权限"""
-        # 超级管理员拥有所有权限
-        if await user.has_role("super_admin", db):
+        # 拥有通配符权限(*)的用户拥有所有权限
+        if await user.has_permission("*", db):
             return True
+         # 拥有通配符权限(*)的用户拥有所有权限
+        if await user.has_permission("super", db):
+            return True
+        
         
         # 检查用户是否有指定权限
         return await user.has_permission(permission, db)
@@ -384,7 +388,7 @@ def require_admin():
     return require_role("admin")
 
 def require_super_admin():
-    return require_role("super_admin")
+    return require_permission("*")
 
 def require_director():
     return require_role("director")

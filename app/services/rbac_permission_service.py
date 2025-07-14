@@ -7,7 +7,6 @@
 
 from typing import List, Set, Dict, Optional, Union
 from functools import lru_cache
-import fnmatch
 import asyncio
 from datetime import datetime, timedelta
 
@@ -193,7 +192,7 @@ class RBACPermissionService:
         user_permissions: Set[str]
     ) -> bool:
         """
-        匹配权限，支持通配符
+        匹配权限（精确匹配）
         
         Args:
             required_permission: 需要的权限
@@ -203,75 +202,11 @@ class RBACPermissionService:
             bool: 是否匹配
         """
         # 直接匹配
-        if required_permission in user_permissions:
-            return True
-        
-        # 检查通配符权限
-        for user_perm in user_permissions:
-            if self._is_wildcard_match(required_permission, user_perm):
-                return True
-        
-        return False
+        return required_permission in user_permissions
     
-    def _is_wildcard_match(self, required: str, pattern: str) -> bool:
-        """
-        检查通配符权限匹配
-        
-        支持的通配符模式:
-        - '*': 匹配所有权限
-        - 'module:*': 匹配指定模块的所有权限
-        - '*:action': 匹配所有模块的指定操作
-        - 'module:action:*': 匹配指定模块和操作的所有资源
-        
-        Args:
-            required: 需要的权限
-            pattern: 通配符模式
-            
-        Returns:
-            bool: 是否匹配
-        """
-        # 全权限通配符
-        if pattern == '*':
-            return True
-        
-        # 使用fnmatch进行通配符匹配
-        if fnmatch.fnmatch(required, pattern):
-            return True
-        
-        # 自定义权限层级匹配
-        return self._hierarchical_match(required, pattern)
     
-    def _hierarchical_match(self, required: str, pattern: str) -> bool:
-        """
-        层级权限匹配
-        
-        权限格式: module:action:resource
-        例如: user:read:profile, script:write:123
-        
-        Args:
-            required: 需要的权限
-            pattern: 权限模式
-            
-        Returns:
-            bool: 是否匹配
-        """
-        required_parts = required.split(':')
-        pattern_parts = pattern.split(':')
-        
-        # 长度不匹配时的处理
-        if len(pattern_parts) > len(required_parts):
-            return False
-        
-        # 逐级匹配
-        for i, (req_part, pat_part) in enumerate(zip(required_parts, pattern_parts)):
-            if pat_part == '*':
-                # 通配符匹配剩余所有部分
-                return True
-            elif pat_part != req_part:
-                return False
-        
-        # 如果模式更短，检查是否为前缀匹配
-        return len(pattern_parts) <= len(required_parts)
+    
+    
     
     async def get_user_roles(
         self, 

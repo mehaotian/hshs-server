@@ -35,32 +35,16 @@ class Role(Base):
         return [rp.permission.name for rp in self.role_permissions if rp.permission]
     
     def has_permission(self, permission: str) -> bool:
-        """检查角色是否拥有指定权限（支持通配符匹配）"""
+        """检查角色是否拥有指定权限"""
         for rp in self.role_permissions:
             if not rp.permission:
                 continue
                 
             perm_name = rp.permission.name
             
-            # 1. 检查超级权限 *:* 或 *
-            if perm_name in ['*:*', '*']:
-                return True
-            
-            # 2. 精确匹配
+            # 精确匹配
             if perm_name == permission:
                 return True
-            
-            # 3. 通配符匹配（如果权限支持通配符）
-            if rp.permission.is_wildcard and ':' in permission:
-                module, action = permission.split(':', 1)
-                
-                # 检查模块通配符 module:*
-                if perm_name == f"{module}:*":
-                    return True
-                
-                # 检查操作通配符 *:action
-                if perm_name == f"*:{action}":
-                    return True
         
         return False
     
