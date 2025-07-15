@@ -563,8 +563,8 @@ async def update_department_member(
         )
 
 
-@router.delete("/members/remove/{department_id}/{member_id}", summary="移除部门成员")
-async def remove_department_member(
+@router.delete("/members/delete/{department_id}/{member_id}", summary="删除部门成员")
+async def delete_department_member(
     department_id: int,
     member_id: int,
     db: AsyncSession = Depends(get_db),
@@ -786,8 +786,8 @@ async def add_deputy_manager(
         )
 
 
-@router.delete("/remove-deputy-manager/{department_id}/{user_id}", summary="移除副部长")
-async def remove_deputy_manager(
+@router.delete("/delete-deputy-manager/{department_id}/{user_id}", summary="删除副部长")
+async def delete_deputy_manager(
     department_id: int,
     user_id: int,
     db: AsyncSession = Depends(get_db),

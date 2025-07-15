@@ -28,7 +28,7 @@ router = APIRouter()
 
 # ==================== CV录音管理 ====================
 
-@router.post("/recordings", response_model=CVRecordingResponse, summary="创建CV录音")
+@router.post("/recordings/add", response_model=CVRecordingResponse, summary="创建CV录音")
 async def create_cv_recording(
     title: str = Form(...),
     description: Optional[str] = Form(None),
@@ -242,7 +242,7 @@ async def download_audio_file(
 
 # ==================== 审听记录管理 ====================
 
-@router.post("/reviews", response_model=ReviewRecordResponse, summary="创建审听记录")
+@router.post("/reviews/add", response_model=ReviewRecordResponse, summary="创建审听记录")
 async def create_review_record(
     review_data: ReviewRecordCreate,
     db: AsyncSession = Depends(get_db),
@@ -345,7 +345,7 @@ async def get_recording_reviews(
 
 # ==================== 反音记录管理 ====================
 
-@router.post("/feedback", response_model=FeedbackRecordResponse, summary="创建反音记录")
+@router.post("/feedback/add", response_model=FeedbackRecordResponse, summary="创建反音记录")
 async def create_feedback_record(
     feedback_data: FeedbackRecordCreate,
     db: AsyncSession = Depends(get_db),

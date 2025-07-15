@@ -473,6 +473,11 @@ class RoleService:
             parent_id_changed = True
             new_parent_id = permission_data.parent_id
             
+            # 处理 parent_id = 0 的情况，将其视为根权限（parent_id = None）
+            if new_parent_id == 0:
+                new_parent_id = None
+                permission_data.parent_id = None
+            
             # 验证新父权限存在性
             if new_parent_id is not None:
                 parent_result = await self.db.execute(

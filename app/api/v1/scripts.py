@@ -154,7 +154,7 @@ async def get_drama_societies(
 
 # ==================== 剧本管理 ====================
 
-@router.post("/", response_model=ScriptResponse, summary="创建剧本")
+@router.post("/add", response_model=ScriptResponse, summary="创建剧本")
 async def create_script(
     script_data: ScriptCreate,
     db: AsyncSession = Depends(get_db),
@@ -302,7 +302,7 @@ async def get_scripts(
 
 # ==================== 章节管理 ====================
 
-@router.post("/{script_id}/chapters", response_model=ScriptChapterResponse, summary="创建章节")
+@router.post("/{script_id}/chapters/add", response_model=ScriptChapterResponse, summary="创建章节")
 async def create_script_chapter(
     script_id: int,
     chapter_data: ScriptChapterCreate,

@@ -485,162 +485,6 @@ async def get_role_statistics(
 
 # ==================== 权限管理 ====================
 
-@router.post("/permissions/add", response_model=PermissionResponse, summary="创建权限")
-async def create_permission(
-    permission_data: PermissionCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("permission:create"))
-):
-    """创建新权限"""
-    try:
-        role_service = RoleService(db)
-        permission = await role_service.create_permission(permission_data)
-
-        log_security_event(
-            "permission_created",
-            user_id=current_user.id,
-            details=f"permission_name: {permission.name}, permission_id: {permission.id}"
-        )
-
-        # 手动构建权限数据，避免关系查询
-        permission_data = {
-            'id': permission.id,
-            'name': permission.name,
-            'display_name': permission.display_name,
-            'description': permission.description,
-            'module': permission.module,
-            'action': permission.action,
-            'resource': permission.resource,
-            'is_system': bool(permission.is_system),
-            'sort_order': permission.sort_order,
-            'created_at': permission.created_at.isoformat() if permission.created_at else None,
-            'updated_at': permission.updated_at.isoformat() if permission.updated_at else None,
-        }
-
-        return ResponseBuilder.success(
-            data=permission_data,
-            message="权限创建成功"
-        )
-    except BaseCustomException:
-        # 重新抛出自定义异常，保持原有的错误信息
-        raise
-    except Exception as e:
-        logger.error(f"Failed to create permission: {str(e)}")
-        raise_business_error("创建权限失败", 1000)
-
-
-@router.get("/permissions/detail/{permission_id}", response_model=PermissionResponse, summary="获取权限信息")
-async def get_permission(
-    permission_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("permission:read"))
-):
-    """根据ID获取权限信息"""
-    try:
-        role_service = RoleService(db)
-        permission = await role_service.get_permission_detail(permission_id)
-
-        if not permission:
-            raise_not_found_resource("权限")
-
-        # 手动构建权限数据，避免关系查询
-        permission_data = {
-            'id': permission.id,
-            'name': permission.name,
-            'display_name': permission.display_name,
-            'description': permission.description,
-            'module': permission.module,
-            'action': permission.action,
-            'resource': permission.resource,
-            'is_system': bool(permission.is_system),
-            'sort_order': permission.sort_order,
-            'created_at': permission.created_at.isoformat() if permission.created_at else None,
-            'updated_at': permission.updated_at.isoformat() if permission.updated_at else None,
-        }
-
-        return ResponseBuilder.success(
-            data=permission_data,
-            message="获取权限信息成功"
-        )
-    except BaseCustomException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get permission: {str(e)}")
-        raise_business_error("获取权限信息失败", 1000)
-
-
-@router.put("/permissions/update/{permission_id}", response_model=PermissionResponse, summary="更新权限信息")
-async def update_permission(
-    permission_id: int,
-    permission_data: PermissionUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("permission:update"))
-):
-    """更新权限信息"""
-    try:
-        role_service = RoleService(db)
-        updated_permission = await role_service.update_permission(permission_id, permission_data)
-
-        log_security_event(
-            "permission_updated",
-            user_id=current_user.id,
-            details=f"permission_id: {permission_id}, updated_fields: {list(permission_data.dict(exclude_unset=True).keys())}"
-        )
-
-        # 手动构建权限数据，避免关系查询
-        permission_data = {
-            'id': updated_permission.id,
-            'name': updated_permission.name,
-            'display_name': updated_permission.display_name,
-            'description': updated_permission.description,
-            'module': updated_permission.module,
-            'action': updated_permission.action,
-            'resource': updated_permission.resource,
-            'is_system': bool(updated_permission.is_system),
-            'sort_order': updated_permission.sort_order,
-            'created_at': updated_permission.created_at.isoformat() if updated_permission.created_at else None,
-            'updated_at': updated_permission.updated_at.isoformat() if updated_permission.updated_at else None,
-        }
-
-        return ResponseBuilder.success(
-            data=permission_data,
-            message="权限信息更新成功"
-        )
-    except BaseCustomException:
-        # 让自定义异常传播到全局异常处理器，这样可以返回精确的错误信息
-        raise
-    except Exception as e:
-        logger.error(f"Failed to update permission: {str(e)}")
-        raise_business_error("更新权限失败", 1000)
-
-
-@router.delete("/permissions/delete/{permission_id}", summary="删除权限")
-async def delete_permission(
-    permission_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("permission:delete"))
-):
-    """删除权限"""
-    try:
-        role_service = RoleService(db)
-        await role_service.delete_permission(permission_id)
-
-        log_security_event(
-            "permission_deleted",
-            user_id=current_user.id,
-            details=f"permission_id: {permission_id}"
-        )
-
-        return ResponseBuilder.success(
-            message="权限删除成功"
-        )
-    except BaseCustomException:
-        # 让自定义异常传播到全局异常处理器，这样可以返回精确的错误信息
-        raise
-    except Exception as e:
-        logger.error(f"Failed to delete permission: {str(e)}")
-        raise_business_error("删除权限失败", 1000)
-
 
 @router.get("/permissions/list", response_model=PermissionListResponse, summary="获取权限列表")
 async def get_permissions(
@@ -736,23 +580,7 @@ async def get_permissions(
 
 # ==================== 权限分类管理 ====================
 
-@router.get("/permissions/tree", response_model=PermissionTreeResponse, summary="获取权限分类树")
-async def get_permission_tree(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("permission:read"))
-):
-    """获取权限分类树结构"""
-    try:
-        role_service = RoleService(db)
-        tree_data = await role_service.get_permission_tree()
-        
-        return ResponseBuilder.success(
-            data=tree_data,
-            message="获取权限分类树成功"
-        )
-    except Exception as e:
-        logger.error(f"Failed to get permission tree: {str(e)}")
-        raise_business_error("获取权限分类树失败", 1000)
+
 
 
 @router.get("/permissions", summary="获取权限列表")
@@ -797,7 +625,7 @@ async def get_permissions(
         raise_business_error("获取权限列表失败", 1000)
 
 
-@router.post("/permissions", summary="创建权限")
+@router.post("/permissions/add", summary="创建权限")
 async def create_permission(
     permission_data: PermissionCreate,
     db: AsyncSession = Depends(get_db),
@@ -806,15 +634,7 @@ async def create_permission(
     """创建权限"""
     try:
         role_service = RoleService(db)
-        permission = await role_service.create_permission(
-            name=permission_data.name,
-            display_name=permission_data.display_name,
-            parent_id=permission_data.parent_id,
-            description=permission_data.description,
-            module=permission_data.module,
-            action=permission_data.action,
-            resource=permission_data.resource
-        )
+        permission = await role_service.create_permission(permission_data)
         
         log_security_event(
             "permission_created",
@@ -852,7 +672,7 @@ async def create_permission(
         raise_business_error("创建权限失败", 1000)
 
 
-@router.put("/permissions/{permission_id}", summary="更新权限")
+@router.put("/permissions/update/{permission_id}", summary="更新权限")
 async def update_permission(
     permission_id: int,
     permission_data: PermissionUpdate,
@@ -864,12 +684,7 @@ async def update_permission(
         role_service = RoleService(db)
         updated_permission = await role_service.update_permission(
             permission_id=permission_id,
-            name=permission_data.name,
-            display_name=permission_data.display_name,
-            description=permission_data.description,
-            module=permission_data.module,
-            action=permission_data.action,
-            resource=permission_data.resource
+            permission_data=permission_data
         )
         
         log_security_event(
@@ -908,7 +723,7 @@ async def update_permission(
         raise_business_error("更新权限失败", 1000)
 
 
-@router.delete("/permissions/{permission_id}", summary="删除权限")
+@router.delete("/permissions/delete/{permission_id}", summary="删除权限")
 async def delete_permission(
     permission_id: int,
     db: AsyncSession = Depends(get_db),
@@ -1047,7 +862,7 @@ async def get_permission_tree(
         raise_business_error("获取权限树失败", 1000)
 
 
-@router.get("/permissions/{permission_id}", summary="获取权限详情")
+@router.get("/permissions/detail/{permission_id}", summary="获取权限详情")
 async def get_permission_detail(
     permission_id: int,
     db: AsyncSession = Depends(get_db),
