@@ -6,22 +6,42 @@ from enum import Enum
 
 class PermissionType(str, Enum):
     """权限类型枚举"""
+    CREATE = "create"
     READ = "read"
-    WRITE = "write"
+    UPDATE = "update"
     DELETE = "delete"
-    EXECUTE = "execute"
     MANAGE = "manage"
+    ASSIGN = "assign"
+    EXECUTE = "execute"
+    UPLOAD = "upload"
+    DOWNLOAD = "download"
+    REVIEW = "review"
+    APPROVE = "approve"
+    REJECT = "reject"
+    CONFIG = "config"
+    LOG = "log"
+    MONITOR = "monitor"
+    ASSIGN_ROLE = "assign_role"
+    ASSIGN_PERMISSION = "assign_permission"
+    MANAGE_MEMBERS = "manage_members"
+    VIEW_STATISTICS = "view_statistics"
+    ADD_MEMBER = "add_member"
+    REMOVE_MEMBER = "remove_member"
 
 
 class ResourceType(str, Enum):
     """资源类型枚举"""
     USER = "user"
     ROLE = "role"
+    PERMISSION = "permission"
     SCRIPT = "script"
     AUDIO = "audio"
     REVIEW = "review"
     SOCIETY = "society"
     SYSTEM = "system"
+    DEPARTMENT = "department"
+    DEPARTMENT_MEMBER = "department_member"
+    CONTENT = "content"
 
 
 class PermissionBase(BaseModel):
@@ -31,8 +51,8 @@ class PermissionBase(BaseModel):
     description: Optional[str] = Field(
         None, max_length=500, description="权限描述")
     module: Optional[str] = Field(None, max_length=50, description="所属模块")
-    action: Optional[PermissionType] = Field(None, description="操作类型")
-    resource: Optional[ResourceType] = Field(None, description="资源类型")
+    action: Optional[str] = Field(None, description="操作类型")
+    resource: Optional[str] = Field(None, description="资源类型")
     sort_order: int = Field(0, description="排序顺序")
     
     # 层级权限相关字段
@@ -50,11 +70,60 @@ class PermissionBase(BaseModel):
         if not v.replace('_', '').replace(':', '').replace('*', '').isalnum():
             raise ValueError('权限名称只能包含字母、数字、下划线、冒号和星号')
         return v
+    
+    @validator('action')
+    def validate_action(cls, v):
+        if v is not None and v != '' and v not in [e.value for e in PermissionType]:
+            # 对于根权限，允许为 None 或空字符串
+            return v
+        return v
+    
+    @validator('resource')
+    def validate_resource(cls, v):
+        if v is not None and v != '' and v not in [e.value for e in ResourceType]:
+            # 对于根权限，允许为 None 或空字符串，也允许自定义值
+            return v
+        return v
+    
+    @validator('action')
+    def validate_action(cls, v):
+        if v is not None and v != '' and v not in [e.value for e in PermissionType]:
+            # 对于根权限，允许为 None 或空字符串
+            return v
+        return v
+    
+    @validator('resource')
+    def validate_resource(cls, v):
+        if v is not None and v != '' and v not in [e.value for e in ResourceType]:
+            # 对于根权限，允许为 None 或空字符串，也允许自定义值
+            return v
+        return v
 
 
-class PermissionCreate(PermissionBase):
+class PermissionCreate(BaseModel):
     """创建权限模型"""
-    pass
+    name: str = Field(..., max_length=100, description="权限名称")
+    display_name: str = Field(..., max_length=100, description="显示名称")
+    description: Optional[str] = Field(
+        None, max_length=500, description="权限描述")
+    module: Optional[str] = Field(None, max_length=50, description="所属模块")
+    action: Optional[str] = Field(None, description="操作类型")
+    resource: Optional[str] = Field(None, description="资源类型")
+    sort_order: int = Field(0, description="排序顺序")
+    
+    # 仅包含父权限ID，level 和 path 由系统自动计算
+    parent_id: Optional[int] = Field(None, description="父权限ID")
+    
+    @property
+    def is_wildcard(self) -> bool:
+        """判断是否为通配符权限"""
+        return '*' in (self.name or '')
+
+    @validator('name')
+    def validate_name(cls, v):
+        if not v.replace('_', '').replace(':', '').replace('*', '').isalnum():
+            raise ValueError('权限名称只能包含字母、数字、下划线、冒号和星号')
+        return v
 
 
 class PermissionUpdate(BaseModel):
@@ -65,10 +134,13 @@ class PermissionUpdate(BaseModel):
     description: Optional[str] = Field(
         None, max_length=500, description="权限描述")
     module: Optional[str] = Field(None, max_length=50, description="所属模块")
-    action: Optional[PermissionType] = Field(None, description="操作类型")
-    resource: Optional[ResourceType] = Field(None, description="资源类型")
+    action: Optional[str] = Field(None, description="操作类型")
+    resource: Optional[str] = Field(None, description="资源类型")
     is_active: Optional[bool] = Field(None, description="是否激活")
     sort_order: Optional[int] = Field(None, description="排序顺序")
+    
+    # 允许修改父权限关系，level 和 path 由系统自动重新计算
+    parent_id: Optional[int] = Field(None, description="父权限ID")
     
     @property
     def is_wildcard(self) -> bool:
@@ -79,6 +151,20 @@ class PermissionUpdate(BaseModel):
     def validate_name(cls, v):
         if v and not v.replace('_', '').replace(':', '').replace('*', '').isalnum():
             raise ValueError('权限名称只能包含字母、数字、下划线、冒号和星号')
+        return v
+    
+    @validator('action')
+    def validate_action(cls, v):
+        if v is not None and v != '' and v not in [e.value for e in PermissionType]:
+            # 对于根权限，允许为 None 或空字符串
+            return v
+        return v
+    
+    @validator('resource')
+    def validate_resource(cls, v):
+        if v is not None and v != '' and v not in [e.value for e in ResourceType]:
+            # 对于根权限，允许为 None 或空字符串，也允许自定义值
+            return v
         return v
 
 

@@ -538,7 +538,7 @@ async def get_permission(
     """根据ID获取权限信息"""
     try:
         role_service = RoleService(db)
-        permission = await role_service.get_permission_by_id(permission_id)
+        permission = await role_service.get_permission_detail(permission_id)
 
         if not permission:
             raise_not_found_resource("权限")
@@ -685,7 +685,11 @@ async def get_permissions(
                 'module': permission.module,
                 'action': permission.action,
                 'resource': permission.resource,
+                'parent_id': permission.parent_id,
+                'level': permission.level,
+                'path': permission.path,
                 'is_system': bool(permission.is_system),
+                'is_active': bool(permission.is_active),
                 'sort_order': permission.sort_order,
                 'created_at': permission.created_at.isoformat() if permission.created_at else None,
                 'updated_at': permission.updated_at.isoformat() if permission.updated_at else None,
@@ -760,7 +764,7 @@ async def get_permissions(
     """获取权限列表（支持层级过滤）"""
     try:
         role_service = RoleService(db)
-        permissions = await role_service.get_permissions(parent_id=parent_id)
+        permissions = await role_service.get_permissions_by_parent(parent_id=parent_id)
         
         # 构建权限数据
         permissions_data = []
