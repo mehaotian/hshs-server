@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_department_tables'
-down_revision = None  # 请根据实际情况修改为上一个迁移的revision
+down_revision = 'create_base_tables'
 branch_labels = None
 depends_on = None
 
@@ -32,8 +32,8 @@ def upgrade() -> None:
         sa.Column('level', sa.Integer(), nullable=False, default=1, comment='部门层级'),
         sa.Column('path', sa.String(length=500), nullable=True, comment='部门路径'),
         sa.Column('remarks', sa.Text(), nullable=True, comment='备注'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='创建时间'),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='更新时间'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='创建时间'),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='更新时间'),
         sa.Column('created_by', sa.Integer(), nullable=True, comment='创建人ID'),
         sa.Column('updated_by', sa.Integer(), nullable=True, comment='更新人ID'),
         sa.PrimaryKeyConstraint('id'),
@@ -53,11 +53,11 @@ def upgrade() -> None:
         sa.Column('position', sa.String(length=100), nullable=True, comment='职位'),
         sa.Column('is_manager', sa.Boolean(), nullable=False, default=False, comment='是否为负责人'),
         sa.Column('status', sa.Integer(), nullable=False, default=1, comment='成员状态：1-正常，2-离职'),
-        sa.Column('joined_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='加入时间'),
+        sa.Column('joined_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='加入时间'),
         sa.Column('left_at', sa.DateTime(timezone=True), nullable=True, comment='离职时间'),
         sa.Column('remarks', sa.Text(), nullable=True, comment='备注'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='创建时间'),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='更新时间'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='创建时间'),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='更新时间'),
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['department_id'], ['departments.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
@@ -92,75 +92,12 @@ def upgrade() -> None:
     op.create_index('idx_departments_name_parent_unique', 'departments', ['name', 'parent_id'], unique=True)
     op.create_index('idx_department_members_dept_user_unique', 'department_members', ['department_id', 'user_id'], unique=True)
     
-    # 创建更新时间触发器函数（如果不存在）
-    op.execute("""
-        CREATE OR REPLACE FUNCTION update_updated_at_column()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            NEW.updated_at = now();
-            RETURN NEW;
-        END;
-        $$ language 'plpgsql';
-    """)
+    # SQLite不支持触发器函数，updated_at字段将在应用层更新
     
-    # 为部门表创建更新时间触发器
-    op.execute("""
-        CREATE TRIGGER update_departments_updated_at
-            BEFORE UPDATE ON departments
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at_column();
-    """)
-    
-    # 为部门成员表创建更新时间触发器
-    op.execute("""
-        CREATE TRIGGER update_department_members_updated_at
-            BEFORE UPDATE ON department_members
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at_column();
-    """)
-    
-    # 添加检查约束
-    op.create_check_constraint(
-        'ck_departments_status',
-        'departments',
-        'status IN (1, 2)'
-    )
-    
-    op.create_check_constraint(
-        'ck_departments_level',
-        'departments',
-        'level >= 1 AND level <= 10'
-    )
-    
-    op.create_check_constraint(
-        'ck_departments_sort_order',
-        'departments',
-        'sort_order >= 0'
-    )
-    
-    op.create_check_constraint(
-        'ck_department_members_status',
-        'department_members',
-        'status IN (1, 2)'
-    )
-    
-    # 防止部门自引用
-    op.create_check_constraint(
-        'ck_departments_no_self_reference',
-        'departments',
-        'id != parent_id'
-    )
+    # SQLite不支持ALTER约束操作，检查约束将在应用层实现
 
 
 def downgrade() -> None:
-    # 删除触发器
-    op.execute('DROP TRIGGER IF EXISTS update_department_members_updated_at ON department_members;')
-    op.execute('DROP TRIGGER IF EXISTS update_departments_updated_at ON departments;')
-    
     # 删除表（会自动删除相关的索引和约束）
     op.drop_table('department_members')
     op.drop_table('departments')
-    
-    # 注意：这里不删除触发器函数，因为其他表可能也在使用
-    # 如果确定没有其他表使用，可以取消注释下面的语句
-    # op.execute('DROP FUNCTION IF EXISTS update_updated_at_column();')

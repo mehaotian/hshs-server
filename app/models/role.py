@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from typing import Dict, List, Any, Optional
 
@@ -158,11 +158,18 @@ class Permission(Base):
     is_active = Column(Integer, default=1, comment="是否激活：1-是，0-否")
     sort_order = Column(Integer, default=0, comment="排序顺序")
     
+    # 层级权限相关字段
+    parent_id = Column(Integer, ForeignKey('permissions.id', ondelete='CASCADE'), nullable=True, comment="父权限ID")
+    level = Column(Integer, default=0, comment="权限层级：0-根级，1-一级，2-二级等")
+    path = Column(String(500), nullable=True, comment="权限路径，用于快速查询子权限")
+    
     created_at = Column(DateTime, default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
     
     # 关系映射
     role_permissions = relationship("RolePermission", back_populates="permission", cascade="all, delete-orphan")
+    # 自引用关系：父子权限
+    children = relationship("Permission", backref=backref("parent", remote_side=[id]), cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<Permission(id={self.id}, name='{self.name}')>"
@@ -186,9 +193,42 @@ class Permission(Base):
             'is_wildcard': self.is_wildcard,
             'is_active': bool(self.is_active),
             'sort_order': self.sort_order,
+            'parent_id': self.parent_id,
+            'level': self.level,
+            'path': self.path,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+    
+    def get_all_children(self) -> List['Permission']:
+        """递归获取所有子权限"""
+        all_children = []
+        for child in self.children:
+            all_children.append(child)
+            all_children.extend(child.get_all_children())
+        return all_children
+    
+    def get_ancestors(self) -> List['Permission']:
+        """获取所有祖先权限"""
+        ancestors = []
+        current = self.parent
+        while current:
+            ancestors.append(current)
+            current = current.parent
+        return ancestors
+    
+    def build_path(self) -> str:
+        """构建权限路径"""
+        if not self.parent:
+            return f"/{self.name}"
+        return f"{self.parent.build_path()}/{self.name}"
+    
+    def to_tree_dict(self, include_children: bool = True) -> Dict[str, Any]:
+        """转换为树形结构字典"""
+        result = self.to_dict()
+        if include_children and self.children:
+            result['children'] = [child.to_tree_dict(include_children=True) for child in sorted(self.children, key=lambda x: x.sort_order)]
+        return result
     
     @classmethod
     def get_system_permissions(cls) -> List[Dict[str, Any]]:

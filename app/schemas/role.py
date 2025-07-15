@@ -30,11 +30,15 @@ class PermissionBase(BaseModel):
     display_name: str = Field(..., max_length=100, description="显示名称")
     description: Optional[str] = Field(
         None, max_length=500, description="权限描述")
-    module: str = Field(..., max_length=50, description="所属模块")
-    action: PermissionType = Field(..., description="操作类型")
-    resource: ResourceType = Field(..., description="资源类型")
-    # is_wildcard 字段已移除，现在通过权限名称自动判断
+    module: Optional[str] = Field(None, max_length=50, description="所属模块")
+    action: Optional[PermissionType] = Field(None, description="操作类型")
+    resource: Optional[ResourceType] = Field(None, description="资源类型")
     sort_order: int = Field(0, description="排序顺序")
+    
+    # 层级权限相关字段
+    parent_id: Optional[int] = Field(None, description="父权限ID")
+    level: int = Field(0, description="权限层级")
+    path: Optional[str] = Field(None, max_length=500, description="权限路径")
     
     @property
     def is_wildcard(self) -> bool:
@@ -63,7 +67,6 @@ class PermissionUpdate(BaseModel):
     module: Optional[str] = Field(None, max_length=50, description="所属模块")
     action: Optional[PermissionType] = Field(None, description="操作类型")
     resource: Optional[ResourceType] = Field(None, description="资源类型")
-    # is_wildcard 字段已移除，现在通过权限名称自动判断
     is_active: Optional[bool] = Field(None, description="是否激活")
     sort_order: Optional[int] = Field(None, description="排序顺序")
     
@@ -81,11 +84,11 @@ class PermissionUpdate(BaseModel):
 
 class PermissionResponse(PermissionBase):
     """权限响应模型"""
-    id: int
+    id: int = Field(..., description="权限ID")
     is_system: bool
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    is_active: bool = Field(True, description="是否激活")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: Optional[datetime] = Field(None, description="更新时间")
 
     class Config:
         from_attributes = True
@@ -94,13 +97,43 @@ class PermissionResponse(PermissionBase):
         }
 
 
+class PermissionTreeNode(BaseModel):
+    """权限树节点模型"""
+    id: int
+    name: str
+    display_name: str
+    description: Optional[str]
+    parent_id: Optional[int]
+    level: int
+    path: Optional[str]
+    is_category: bool
+    is_system: bool
+    is_active: bool
+    sort_order: int
+    children: List['PermissionTreeNode'] = Field(default_factory=list, description="子权限列表")
+    
+    class Config:
+        from_attributes = True
+
+
+class PermissionTreeResponse(BaseModel):
+    """权限树响应模型"""
+    tree: List[PermissionTreeNode]
+    total: int
+    
+    class Config:
+        from_attributes = True
+
+
+
+
+
 class PermissionListResponse(BaseModel):
     """权限列表响应模型"""
-    items: List[PermissionResponse]
-    total: int
-    page: int
-    size: int
-    pages: int
+    permissions: List[PermissionResponse] = Field(..., description="权限列表")
+    total: int = Field(..., description="总数")
+    page: int = Field(..., description="当前页")
+    page_size: int = Field(..., description="每页大小")
 
     class Config:
         from_attributes = True
@@ -221,6 +254,10 @@ class UserRoleBase(BaseModel):
         return v
 
 
+# 更新前向引用
+PermissionTreeNode.model_rebuild()
+
+
 class UserRoleCreate(UserRoleBase):
     """创建用户角色模型"""
     pass
@@ -285,6 +322,11 @@ class PermissionSearchQuery(BaseModel):
     action: Optional[str] = Field(None, description="操作类型")
     resource: Optional[str] = Field(None, description="资源类型")
     is_system: Optional[bool] = Field(None, description="是否系统权限")
+    # 权限分类相关查询字段
+    parent_id: Optional[int] = Field(None, description="父权限ID")
+    level: Optional[int] = Field(None, description="权限层级")
+    is_category: Optional[bool] = Field(None, description="是否为分类")
+    include_children: bool = Field(False, description="是否包含子权限")
     page: int = Field(1, ge=1, description="页码")
     page_size: int = Field(20, ge=1, le=100, description="每页数量")
     order_by: str = Field("sort_order", description="排序字段")

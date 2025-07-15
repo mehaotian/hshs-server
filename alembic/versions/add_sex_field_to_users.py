@@ -18,11 +18,12 @@ depends_on = None
 
 def upgrade() -> None:
     """添加性别字段到用户表"""
-    # 添加性别字段
-    op.add_column('users', sa.Column('sex', sa.String(10), nullable=True, comment='性别：male-男，female-女，other-其他'))
+    # 注意：sex字段已经在create_base_tables.py中定义为Integer类型
+    # 这里不需要再添加
+    pass
 
 
 def downgrade() -> None:
     """移除性别字段"""
-    # 删除性别字段
-    op.drop_column('users', 'sex')
+    # 注意：sex字段在create_base_tables.py中定义，这里不删除
+    pass

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     RELOAD: bool = True
     
     # 数据库配置
-    DATABASE_URL: str = "sqlite+aiosqlite:///./hshs_db.sqlite"
+    DATABASE_URL: str = "postgresql+asyncpg://ht:1qaz!QAZ@artifind.art:5432/hshs_db"
     DATABASE_ECHO: bool = False  # 是否打印SQL语句
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 30

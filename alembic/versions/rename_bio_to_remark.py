@@ -18,11 +18,11 @@ depends_on = None
 
 def upgrade():
     """重命名 bio 字段为 remark"""
-    # 重命名列
-    op.alter_column('users', 'bio', new_column_name='remark')
+    # 注意：create_base_tables.py中已经定义了remark字段，不需要重命名
+    pass
 
 
 def downgrade():
     """回滚：重命名 remark 字段为 bio"""
-    # 重命名列
-    op.alter_column('users', 'remark', new_column_name='bio')
+    # 注意：create_base_tables.py中已经定义了remark字段，不需要重命名
+    pass

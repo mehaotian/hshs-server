@@ -522,6 +522,16 @@ class RoleService:
             if search_query.is_system is not None:
                 conditions.append(Permission.is_system == search_query.is_system)
             
+            # 新增权限分类查询条件
+            if hasattr(search_query, 'parent_id') and search_query.parent_id is not None:
+                conditions.append(Permission.parent_id == search_query.parent_id)
+            
+            if hasattr(search_query, 'level') and search_query.level is not None:
+                conditions.append(Permission.level == search_query.level)
+            
+            if hasattr(search_query, 'is_category') and search_query.is_category is not None:
+                conditions.append(Permission.is_category == search_query.is_category)
+            
             if conditions:
                 query = query.where(and_(*conditions))
         
@@ -532,7 +542,7 @@ class RoleService:
             else:
                 query = query.order_by(getattr(Permission, search_query.order_by))
         else:
-            query = query.order_by(Permission.module, Permission.sort_order)
+            query = query.order_by(Permission.level, Permission.sort_order)
         
         # 获取总数
         count_query = select(func.count(Permission.id))
@@ -556,6 +566,16 @@ class RoleService:
             if search_query.is_system is not None:
                 conditions.append(Permission.is_system == search_query.is_system)
             
+            # 新增权限分类查询条件
+            if hasattr(search_query, 'parent_id') and search_query.parent_id is not None:
+                conditions.append(Permission.parent_id == search_query.parent_id)
+            
+            if hasattr(search_query, 'level') and search_query.level is not None:
+                conditions.append(Permission.level == search_query.level)
+            
+            if hasattr(search_query, 'is_category') and search_query.is_category is not None:
+                conditions.append(Permission.is_category == search_query.is_category)
+            
             if conditions:
                 count_query = count_query.where(and_(*conditions))
         
@@ -570,6 +590,415 @@ class RoleService:
         permissions = result.scalars().all()
         
         return list(permissions), total
+    
+    # ==================== 权限分类管理 ====================
+    
+    async def get_permission_tree(self) -> List[Dict[str, Any]]:
+        """获取权限分类树结构"""
+        # 获取所有权限，按层级和排序字段排序
+        result = await self.db.execute(
+            select(Permission)
+            .order_by(Permission.level, Permission.sort_order)
+        )
+        permissions = result.scalars().all()
+        
+        # 构建权限树
+        permission_map = {}
+        root_permissions = []
+        
+        # 第一遍遍历：创建所有节点
+        for perm in permissions:
+            perm_dict = perm.to_tree_dict()
+            permission_map[perm.id] = perm_dict
+            
+            if perm.parent_id is None:
+                root_permissions.append(perm_dict)
+        
+        # 第二遍遍历：建立父子关系
+        for perm in permissions:
+            if perm.parent_id is not None and perm.parent_id in permission_map:
+                parent = permission_map[perm.parent_id]
+                if 'children' not in parent:
+                    parent['children'] = []
+                parent['children'].append(permission_map[perm.id])
+        
+        return root_permissions
+    
+    async def get_permissions(self, parent_id: Optional[int] = None) -> List[Permission]:
+        """获取权限列表（支持层级过滤）"""
+        query = select(Permission).order_by(Permission.level, Permission.sort_order)
+        
+        if parent_id is not None:
+            query = query.where(Permission.parent_id == parent_id)
+        
+        result = await self.db.execute(query)
+        return result.scalars().all()
+    
+    async def get_permission_tree(self) -> List[Permission]:
+        """获取完整的权限树结构"""
+        result = await self.db.execute(
+            select(Permission)
+            .order_by(Permission.level, Permission.sort_order)
+        )
+        return result.scalars().all()
+    
+    async def get_permission_by_id(self, permission_id: int) -> Optional[Permission]:
+        """根据ID获取权限详情"""
+        result = await self.db.execute(
+            select(Permission).where(Permission.id == permission_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def create_permission(
+        self, 
+        name: str, 
+        display_name: str, 
+        parent_id: Optional[int] = None,
+        description: Optional[str] = None,
+        module: Optional[str] = None,
+        action: Optional[str] = None,
+        resource: Optional[str] = None
+    ) -> Permission:
+        """创建权限"""
+        # 检查权限名是否已存在
+        existing = await self.db.execute(
+            select(Permission).where(Permission.name == name)
+        )
+        if existing.scalar_one_or_none():
+            raise_duplicate("Permission", "name", name)
+        
+        # 计算层级
+        level = 0
+        path = name
+        
+        if parent_id:
+            parent_result = await self.db.execute(
+                select(Permission).where(Permission.id == parent_id)
+            )
+            parent = parent_result.scalar_one_or_none()
+            if not parent:
+                raise_not_found("Permission", parent_id)
+            
+            level = parent.level + 1
+            path = f"{parent.path}.{name}"
+        
+        # 获取同级别的排序位置
+        count_result = await self.db.execute(
+            select(func.count(Permission.id))
+            .where(Permission.parent_id == parent_id)
+        )
+        sort_order = (count_result.scalar() or 0) + 1
+        
+        # 创建权限
+        permission = Permission(
+            name=name,
+            display_name=display_name,
+            description=description,
+            module=module,
+            action=action,
+            resource=resource,
+            parent_id=parent_id,
+            level=level,
+            path=path,
+            is_category=0,  # 统一设为0，不再区分分类
+            is_system=False,
+            is_active=True,
+            sort_order=sort_order
+        )
+        
+        try:
+            self.db.add(permission)
+            await self.db.commit()
+            await self.db.refresh(permission)
+            
+            logger.info(f"Permission created: {name} (ID: {permission.id})")
+            return permission
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to create permission: {str(e)}")
+            raise_business_error("创建权限失败")
+    
+    async def update_permission(
+        self, 
+        permission_id: int, 
+        name: Optional[str] = None,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        module: Optional[str] = None,
+        action: Optional[str] = None,
+        resource: Optional[str] = None
+    ) -> Permission:
+        """更新权限"""
+        permission = await self.get_permission_by_id(permission_id)
+        if not permission:
+            raise_not_found("Permission", permission_id)
+        
+        # 检查名称是否重复
+        if name and name != permission.name:
+            existing = await self.db.execute(
+                select(Permission).where(
+                    and_(
+                        Permission.name == name,
+                        Permission.id != permission_id
+                    )
+                )
+            )
+            if existing.scalar_one_or_none():
+                raise_duplicate("Permission", "name", name)
+        
+        # 更新字段
+        update_data = {}
+        if name:
+            update_data['name'] = name
+        if display_name:
+            update_data['display_name'] = display_name
+        if description is not None:
+            update_data['description'] = description
+        if module is not None:
+            update_data['module'] = module
+        if action is not None:
+            update_data['action'] = action
+        if resource is not None:
+            update_data['resource'] = resource
+        
+        if update_data:
+            try:
+                await self.db.execute(
+                    update(Permission)
+                    .where(Permission.id == permission_id)
+                    .values(**update_data)
+                )
+                
+                # 如果名称发生变化，需要更新路径
+                if name and name != permission.name:
+                    await self._update_permission_paths(permission_id, name)
+                
+                await self.db.commit()
+                
+                # 重新获取更新后的权限
+                result = await self.db.execute(
+                    select(Permission).where(Permission.id == permission_id)
+                )
+                updated_permission = result.scalar_one()
+                
+                logger.info(f"Permission updated: {updated_permission.name} (ID: {permission_id})")
+                return updated_permission
+                
+            except Exception as e:
+                await self.db.rollback()
+                logger.error(f"Failed to update permission: {str(e)}")
+                raise_business_error("更新权限失败")
+        
+        return permission
+    
+    async def delete_permission(self, permission_id: int) -> bool:
+        """删除权限"""
+        permission = await self.get_permission_by_id(permission_id)
+        if not permission:
+            raise_not_found("Permission", permission_id)
+        
+        # 检查是否有子权限
+        children_result = await self.db.execute(
+            select(func.count(Permission.id))
+            .where(Permission.parent_id == permission_id)
+        )
+        children_count = children_result.scalar() or 0
+        
+        if children_count > 0:
+            raise_validation_error("无法删除包含子权限的权限")
+        
+        try:
+            await self.db.execute(
+                delete(Permission).where(Permission.id == permission_id)
+            )
+            await self.db.commit()
+            
+            logger.info(f"Permission deleted: {permission.name} (ID: {permission_id})")
+            return True
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to delete permission: {str(e)}")
+            raise_business_error("删除权限失败")
+    
+    async def move_permission(
+        self, 
+        permission_id: int, 
+        new_parent_id: Optional[int] = None
+    ) -> Permission:
+        """移动权限到新的父权限"""
+        permission = await self.get_permission_by_id(permission_id)
+        if not permission:
+            raise_not_found("Permission", permission_id)
+        
+        # 验证新父权限
+        if new_parent_id:
+            parent_result = await self.db.execute(
+                select(Permission).where(Permission.id == new_parent_id)
+            )
+            parent = parent_result.scalar_one_or_none()
+            if not parent:
+                raise_not_found("Permission", new_parent_id)
+            
+            # 防止循环引用
+            ancestors = await self._get_permission_ancestors(new_parent_id)
+            if permission_id in [a.id for a in ancestors]:
+                raise_validation_error("无法移动到自己的子权限中")
+        
+        try:
+            # 更新权限的父权限
+            await self.db.execute(
+                update(Permission)
+                .where(Permission.id == permission_id)
+                .values(parent_id=new_parent_id)
+            )
+            
+            # 重新计算层级和路径
+            await self._recalculate_permission_hierarchy(permission_id)
+            
+            await self.db.commit()
+            
+            # 重新获取更新后的权限
+            result = await self.db.execute(
+                select(Permission).where(Permission.id == permission_id)
+            )
+            updated_permission = result.scalar_one()
+            
+            logger.info(f"Permission moved: {updated_permission.name} (ID: {permission_id})")
+            return updated_permission
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to move permission: {str(e)}")
+            raise_business_error("移动权限失败")
+    
+    async def get_permission_children(
+        self, 
+        parent_id: Optional[int] = None
+    ) -> List[Permission]:
+        """获取指定权限的子权限"""
+        query = select(Permission).where(Permission.parent_id == parent_id)
+        query = query.order_by(Permission.sort_order)
+        
+        result = await self.db.execute(query)
+        return result.scalars().all()
+    
+    async def _update_permission_paths(self, category_id: int, new_name: str) -> None:
+        """更新权限路径（当分类名称变更时）"""
+        # 获取当前分类信息
+        result = await self.db.execute(
+            select(Permission).where(Permission.id == category_id)
+        )
+        category = result.scalar_one()
+        
+        # 构建新路径
+        if category.parent_id:
+            parent_result = await self.db.execute(
+                select(Permission).where(Permission.id == category.parent_id)
+            )
+            parent = parent_result.scalar_one()
+            new_path = f"{parent.path}.{new_name}"
+        else:
+            new_path = new_name
+        
+        # 更新当前分类的路径
+        await self.db.execute(
+            update(Permission)
+            .where(Permission.id == category_id)
+            .values(path=new_path)
+        )
+        
+        # 递归更新所有子权限的路径
+        await self._update_children_paths(category_id, new_path)
+    
+    async def _update_children_paths(self, parent_id: int, parent_path: str) -> None:
+        """递归更新子权限的路径"""
+        children_result = await self.db.execute(
+            select(Permission).where(Permission.parent_id == parent_id)
+        )
+        children = children_result.scalars().all()
+        
+        for child in children:
+            new_child_path = f"{parent_path}.{child.name}"
+            await self.db.execute(
+                update(Permission)
+                .where(Permission.id == child.id)
+                .values(path=new_child_path)
+            )
+            
+            # 如果子权限也是分类，递归更新其子权限
+            if child.is_category:
+                await self._update_children_paths(child.id, new_child_path)
+    
+    async def _recalculate_permission_hierarchy(self, permission_id: int) -> None:
+        """重新计算权限的层级和路径"""
+        result = await self.db.execute(
+            select(Permission).where(Permission.id == permission_id)
+        )
+        permission = result.scalar_one()
+        
+        # 计算新的层级和路径
+        if permission.parent_id:
+            parent_result = await self.db.execute(
+                select(Permission).where(Permission.id == permission.parent_id)
+            )
+            parent = parent_result.scalar_one()
+            new_level = parent.level + 1
+            new_path = f"{parent.path}.{permission.name}"
+        else:
+            new_level = 0
+            new_path = permission.name
+        
+        # 更新当前权限
+        await self.db.execute(
+            update(Permission)
+            .where(Permission.id == permission_id)
+            .values(level=new_level, path=new_path)
+        )
+        
+        # 如果是分类，递归更新所有子权限
+        if permission.is_category:
+            await self._recalculate_children_hierarchy(permission_id, new_level, new_path)
+    
+    async def _recalculate_children_hierarchy(self, parent_id: int, parent_level: int, parent_path: str) -> None:
+        """递归重新计算子权限的层级和路径"""
+        children_result = await self.db.execute(
+            select(Permission).where(Permission.parent_id == parent_id)
+        )
+        children = children_result.scalars().all()
+        
+        for child in children:
+            new_level = parent_level + 1
+            new_path = f"{parent_path}.{child.name}"
+            
+            await self.db.execute(
+                update(Permission)
+                .where(Permission.id == child.id)
+                .values(level=new_level, path=new_path)
+            )
+            
+            # 如果子权限也是分类，递归更新
+            if child.is_category:
+                await self._recalculate_children_hierarchy(child.id, new_level, new_path)
+    
+    async def _get_permission_ancestors(self, permission_id: int) -> List[Permission]:
+        """获取权限的所有祖先权限"""
+        ancestors = []
+        current_id = permission_id
+        
+        while current_id:
+            result = await self.db.execute(
+                select(Permission).where(Permission.id == current_id)
+            )
+            current = result.scalar_one_or_none()
+            if not current:
+                break
+            
+            ancestors.append(current)
+            current_id = current.parent_id
+        
+        return ancestors
     
     # ==================== 用户角色管理 ====================
     

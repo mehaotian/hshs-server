@@ -24,6 +24,9 @@ config = context.config
 if '+asyncpg' in settings.DATABASE_URL:
     # 将asyncpg替换为psycopg2用于迁移
     sync_url = settings.DATABASE_URL.replace('postgresql+asyncpg', 'postgresql+psycopg2')
+elif '+aiosqlite' in settings.DATABASE_URL:
+    # 将aiosqlite替换为sqlite用于迁移
+    sync_url = settings.DATABASE_URL.replace('sqlite+aiosqlite', 'sqlite')
 else:
     sync_url = settings.DATABASE_URL
 config.set_main_option('sqlalchemy.url', sync_url)

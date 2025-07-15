@@ -17,10 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # 移除 permissions 表的 is_wildcard 字段
-    op.drop_column('permissions', 'is_wildcard')
+    # is_wildcard字段在rbac_system_improvement.py中已经被移除
+    # 这里不需要再删除
+    pass
 
 
 def downgrade() -> None:
-    # 恢复 permissions 表的 is_wildcard 字段
-    op.add_column('permissions', sa.Column('is_wildcard', sa.Integer(), nullable=False, server_default='0', comment='是否通配符权限：1-是，0-否'))
+    # 由于upgrade中没有删除字段，downgrade中也不需要添加
+    pass
