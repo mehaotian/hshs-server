@@ -106,7 +106,7 @@ POST /api/v1/departments/
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "部门创建成功",
   "data": {
     "id": 3,
@@ -143,7 +143,7 @@ GET /api/v1/departments/?page=1&page_size=20&name=技术&status=1
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "获取部门列表成功",
   "data": {
     "items": [
@@ -174,7 +174,7 @@ GET /api/v1/departments/tree?root_id=1
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "获取部门树成功",
   "data": [
     {
@@ -281,7 +281,7 @@ GET /api/v1/departments/statistics
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "获取部门统计信息成功",
   "data": {
     "total_departments": 15,
@@ -333,7 +333,7 @@ GET /api/v1/departments/{department_id}/members?status=1
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "获取部门成员列表成功",
   "data": [
     {

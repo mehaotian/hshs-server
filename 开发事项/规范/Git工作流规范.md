@@ -251,7 +251,7 @@ Before:
 
 After:
 {
-  "code": 200,
+  "code": 0,
   "message": "success",
   "data": {
     "user": { ... },
