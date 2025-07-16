@@ -161,7 +161,7 @@ class User(Base):
     
     async def get_expanded_permissions(self, db=None) -> List[str]:
         """获取用户的展开权限列表（将通配符权限展开为具体权限）"""
-        from app.models.role import SYSTEM_PERMISSIONS, Permission
+        from app.models.role import Permission
         from sqlalchemy import select
         
         # 获取用户的原始权限列表
@@ -176,11 +176,11 @@ class User(Base):
                 db_permissions = {perm[0] for perm in result.fetchall()}
             except Exception as e:
                 print(f"Error querying database permissions: {e}")
-                # 如果查询失败，回退到SYSTEM_PERMISSIONS
-                db_permissions = set(SYSTEM_PERMISSIONS.keys())
+                # 如果查询失败，返回原始权限
+                return raw_permissions
         else:
-            # 如果没有数据库会话，使用SYSTEM_PERMISSIONS作为备选
-            db_permissions = set(SYSTEM_PERMISSIONS.keys())
+            # 如果没有数据库会话，返回原始权限
+            return raw_permissions
         
         for permission in raw_permissions:
             if permission == '*' or permission == '*:*':

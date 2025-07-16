@@ -19,7 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.models.role import Role, Permission, SYSTEM_PERMISSIONS, SYSTEM_ROLES
+from app.models.role import Role, Permission
+# SYSTEM_PERMISSIONS 和 SYSTEM_ROLES 已移除，现在通过数据库迁移管理
 from app.services.role import RoleService
 from app.schemas.role import PermissionCreate, RoleCreate, RoleUpdate, PermissionType, ResourceType
 
@@ -150,68 +151,28 @@ EXTENDED_SYSTEM_PERMISSIONS = [
      }
 ]
 
-# 添加具体的系统权限
-for perm_name, perm_display in SYSTEM_PERMISSIONS.items():
-    # 解析权限名称
-    if ':' in perm_name:
-        module, action = perm_name.split(':', 1)
-    else:
-        module = 'system'
-        action = perm_name
-    
-    # 映射操作类型
-    action_mapping = {
-        'create': PermissionType.WRITE,
-        'read': PermissionType.READ,
-        'update': PermissionType.WRITE,
-        'delete': PermissionType.DELETE,
-        'manage': PermissionType.MANAGE,
-        'assign': PermissionType.WRITE,
-        'upload': PermissionType.WRITE,
-        'download': PermissionType.READ,
-        'review': PermissionType.READ,
-        'approve': PermissionType.WRITE,
-        'reject': PermissionType.WRITE,
-        'publish': PermissionType.WRITE,
-        'archive': PermissionType.WRITE,
-        'export': PermissionType.READ,
-        'import': PermissionType.WRITE,
-        'process': PermissionType.WRITE,
-        'merge': PermissionType.WRITE,
-        'split': PermissionType.WRITE,
-        'batch': PermissionType.WRITE,
-        'config': PermissionType.MANAGE,
-        'log': PermissionType.READ,
-        'monitor': PermissionType.READ,
-        'backup': PermissionType.MANAGE,
-        'restore': PermissionType.MANAGE,
-        'maintenance': PermissionType.MANAGE,
-        'statistics': PermissionType.READ,
-    }
-    
-    # 映射资源类型
-    resource_mapping = {
-        'user': ResourceType.USER,
-        'role': ResourceType.ROLE,
-        'script': ResourceType.SCRIPT,
-        'audio': ResourceType.AUDIO,
-        'review': ResourceType.REVIEW,
-        'society': ResourceType.SOCIETY,
-        'system': ResourceType.SYSTEM,
-    }
-    
-    perm_action = action_mapping.get(action, PermissionType.READ)
-    perm_resource = resource_mapping.get(module, ResourceType.SYSTEM)
-    
-    EXTENDED_SYSTEM_PERMISSIONS.append({
-        "name": perm_name,
-        "display_name": perm_display,
-        "description": f"{perm_display}权限",
-        "module": module,
-        "action": perm_action,
-        "resource": perm_resource,
-        "sort_order": 100 + len(EXTENDED_SYSTEM_PERMISSIONS)
-    })
+# 注意：SYSTEM_PERMISSIONS 已移除，具体的系统权限现在通过数据库迁移脚本管理
+# 如果需要添加新的具体权限，请创建新的数据库迁移文件
+# 以下代码已注释，因为 SYSTEM_PERMISSIONS 不再可用
+
+# for perm_name, perm_display in SYSTEM_PERMISSIONS.items():
+#     # 解析权限名称
+#     if ':' in perm_name:
+#         module, action = perm_name.split(':', 1)
+#     else:
+#         module = 'system'
+#         action = perm_name
+#     
+#     # 映射操作类型和资源类型的逻辑已移至数据库迁移
+#     EXTENDED_SYSTEM_PERMISSIONS.append({
+#         "name": perm_name,
+#         "display_name": perm_display,
+#         "description": f"{perm_display}权限",
+#         "module": module,
+#         "action": perm_action,
+#         "resource": perm_resource,
+#         "sort_order": 100 + len(EXTENDED_SYSTEM_PERMISSIONS)
+#     })
 
 # 更新的系统角色配置（使用通配符权限）
 UPDATED_SYSTEM_ROLES = {

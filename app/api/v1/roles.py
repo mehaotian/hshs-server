@@ -143,7 +143,7 @@ async def get_role(
         
         # 手动查询权限信息并展开通配符权限
         from sqlalchemy import select
-        from app.models.role import RolePermission, Permission, SYSTEM_PERMISSIONS
+        from app.models.role import RolePermission, Permission
         
         # 查询角色的原始权限
         permission_query = (
@@ -170,7 +170,7 @@ async def get_role(
             permissions_data.append({
                 "id": perm.id,  # 使用数据库中的真实ID
                 "name": permission_name,
-                "display_name": perm.display_name or SYSTEM_PERMISSIONS.get(permission_name, permission_name)
+                "display_name": perm.display_name or permission_name
             })
         
         # 然后展开通配符权限，但只基于数据库中实际存在的权限
@@ -199,7 +199,7 @@ async def get_role(
                 permissions_data.append({
                     "id": all_permissions[perm_name]["id"],  # 使用数据库中的真实ID
                     "name": perm_name,
-                    "display_name": all_permissions[perm_name]["display_name"] or SYSTEM_PERMISSIONS.get(perm_name, perm_name)
+                    "display_name": all_permissions[perm_name]["display_name"] or perm_name
                 })
         
         role_data['permissions'] = permissions_data
@@ -262,7 +262,7 @@ async def update_role(
         
         # 手动查询权限信息并展开通配符权限
         from sqlalchemy import select
-        from app.models.role import RolePermission, Permission, SYSTEM_PERMISSIONS
+        from app.models.role import RolePermission, Permission
         
         # 查询角色的原始权限
         permission_query = (
@@ -289,7 +289,7 @@ async def update_role(
             permissions_data.append({
                 "id": perm.id,  # 使用数据库中的真实ID
                 "name": permission_name,
-                "display_name": perm.display_name or SYSTEM_PERMISSIONS.get(permission_name, permission_name)
+                "display_name": perm.display_name or permission_name
             })
         
         # 然后展开通配符权限，但只基于数据库中实际存在的权限
@@ -318,7 +318,7 @@ async def update_role(
                 permissions_data.append({
                     "id": all_permissions[perm_name]["id"],  # 使用数据库中的真实ID
                     "name": perm_name,
-                    "display_name": all_permissions[perm_name]["display_name"] or SYSTEM_PERMISSIONS.get(perm_name, perm_name)
+                    "display_name": all_permissions[perm_name]["display_name"] or perm_name
                 })
         
         role_data['permissions'] = permissions_data
@@ -431,7 +431,7 @@ async def get_roles(
                 role_permissions = [rp.permission.name for rp in role.role_permissions if rp.permission]
                 
                 # 计算展开后的权限数量
-                from app.models.role import SYSTEM_PERMISSIONS
+                # 移除对 SYSTEM_PERMISSIONS 的依赖，直接使用数据库权限
                 expanded_permissions = set()
                 
                 for permission in role_permissions:

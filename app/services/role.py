@@ -1755,25 +1755,9 @@ class RoleService:
     async def initialize_system_data(self) -> bool:
         """初始化系统角色和权限数据"""
         try:
-            # 创建系统权限
-            system_permissions = Permission.get_system_permissions()
-            for perm_data in system_permissions:
-                existing = await self.get_permission_by_name(perm_data["name"])
-                if not existing:
-                    permission = Permission(**perm_data)
-                    self.db.add(permission)
-            
-            # 创建系统角色
-            system_roles = Role.get_system_roles()
-            for role_data in system_roles:
-                existing = await self.get_role_by_name(role_data["name"])
-                if not existing:
-                    role = Role(**role_data)
-                    self.db.add(role)
-            
-            await self.db.commit()
-            
-            logger.info("System roles and permissions initialized")
+            # 系统权限和角色现在通过数据库迁移脚本初始化
+            # 这个方法保留用于未来可能的系统数据初始化需求
+            logger.info("System data initialization completed (managed by database migrations)")
             return True
             
         except Exception as e:
