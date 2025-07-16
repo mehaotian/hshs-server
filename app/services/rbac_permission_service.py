@@ -192,7 +192,7 @@ class RBACPermissionService:
         user_permissions: Set[str]
     ) -> bool:
         """
-        匹配权限（精确匹配）
+        匹配权限（支持通配符匹配）
         
         Args:
             required_permission: 需要的权限
@@ -201,8 +201,34 @@ class RBACPermissionService:
         Returns:
             bool: 是否匹配
         """
-        # 直接匹配
-        return required_permission in user_permissions
+        # 1. 精确匹配
+        if required_permission in user_permissions:
+            return True
+        
+        # 2. 检查通配符权限
+        # 超级管理员权限 *
+        if '*' in user_permissions:
+            return True
+        
+        # 全局通配符权限 *:*
+        if '*:*' in user_permissions:
+            return True
+        
+        # 解析所需权限
+        if ':' in required_permission:
+            module, action = required_permission.split(':', 1)
+            
+            # 模块级通配符权限 module:*
+            module_wildcard = f"{module}:*"
+            if module_wildcard in user_permissions:
+                return True
+            
+            # 操作级通配符权限 *:action
+            action_wildcard = f"*:{action}"
+            if action_wildcard in user_permissions:
+                return True
+        
+        return False
     
     
     

@@ -35,7 +35,7 @@ class Role(Base):
         return [rp.permission.name for rp in self.role_permissions if rp.permission]
     
     def has_permission(self, permission: str) -> bool:
-        """检查角色是否拥有指定权限"""
+        """检查角色是否拥有指定权限（支持通配符权限匹配）"""
         for rp in self.role_permissions:
             if not rp.permission:
                 continue
@@ -45,6 +45,21 @@ class Role(Base):
             # 精确匹配
             if perm_name == permission:
                 return True
+            
+            # 通配符权限匹配
+            if perm_name == '*' or perm_name == '*:*':
+                # 超级权限，匹配所有权限
+                return True
+            elif perm_name.endswith(':*'):
+                # 模块通配符权限，如 user:*
+                module = perm_name[:-2]  # 移除 ':*'
+                if permission.startswith(f"{module}:"):
+                    return True
+            elif perm_name.startswith('*:'):
+                # 操作通配符权限，如 *:read
+                action = perm_name[2:]  # 移除 '*:'
+                if permission.endswith(f":{action}"):
+                    return True
         
         return False
     

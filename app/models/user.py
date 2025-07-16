@@ -161,28 +161,43 @@ class User(Base):
     
     async def get_expanded_permissions(self, db=None) -> List[str]:
         """获取用户的展开权限列表（将通配符权限展开为具体权限）"""
-        from app.models.role import SYSTEM_PERMISSIONS
+        from app.models.role import SYSTEM_PERMISSIONS, Permission
+        from sqlalchemy import select
         
         # 获取用户的原始权限列表
         raw_permissions = await self.get_permissions(db)
         expanded_permissions = set()
         
+        # 如果有数据库会话，查询数据库中实际存在的权限
+        db_permissions = set()
+        if db:
+            try:
+                result = await db.execute(select(Permission.name))
+                db_permissions = {perm[0] for perm in result.fetchall()}
+            except Exception as e:
+                print(f"Error querying database permissions: {e}")
+                # 如果查询失败，回退到SYSTEM_PERMISSIONS
+                db_permissions = set(SYSTEM_PERMISSIONS.keys())
+        else:
+            # 如果没有数据库会话，使用SYSTEM_PERMISSIONS作为备选
+            db_permissions = set(SYSTEM_PERMISSIONS.keys())
+        
         for permission in raw_permissions:
             if permission == '*' or permission == '*:*':
-                # 超级权限，添加所有系统权限
-                expanded_permissions.update(SYSTEM_PERMISSIONS.keys())
+                # 超级权限，添加数据库中实际存在的所有权限
+                expanded_permissions.update(db_permissions)
             elif permission.endswith(':*'):
-                # 模块通配符权限，添加该模块的所有权限
+                # 模块通配符权限，添加该模块在数据库中实际存在的权限
                 module = permission[:-2]  # 移除 ':*'
-                for sys_perm in SYSTEM_PERMISSIONS.keys():
-                    if sys_perm.startswith(f"{module}:"):
-                        expanded_permissions.add(sys_perm)
+                for db_perm in db_permissions:
+                    if db_perm.startswith(f"{module}:"):
+                        expanded_permissions.add(db_perm)
             elif permission.startswith('*:'):
-                # 操作通配符权限，添加所有模块的该操作权限
+                # 操作通配符权限，添加数据库中实际存在的所有模块的该操作权限
                 action = permission[2:]  # 移除 '*:'
-                for sys_perm in SYSTEM_PERMISSIONS.keys():
-                    if sys_perm.endswith(f":{action}"):
-                        expanded_permissions.add(sys_perm)
+                for db_perm in db_permissions:
+                    if db_perm.endswith(f":{action}"):
+                        expanded_permissions.add(db_perm)
             else:
                 # 具体权限，直接添加
                 expanded_permissions.add(permission)

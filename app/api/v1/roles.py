@@ -159,42 +159,48 @@ async def get_role(
         all_permissions_result = await db.execute(all_permissions_query)
         all_permissions = {perm.name: {"id": perm.id, "display_name": perm.display_name} for perm in all_permissions_result.fetchall()}
         
-        # 展开通配符权限
+        # 构建权限响应数据，包含原始权限和展开的权限
+        permissions_data = []
+        original_permission_names = set()
+        
+        # 首先添加原始权限（包括通配符权限）
+        for perm in raw_permissions:
+            permission_name = perm.name
+            original_permission_names.add(permission_name)
+            permissions_data.append({
+                "id": perm.id,  # 使用数据库中的真实ID
+                "name": permission_name,
+                "display_name": perm.display_name or SYSTEM_PERMISSIONS.get(permission_name, permission_name)
+            })
+        
+        # 然后展开通配符权限，但只基于数据库中实际存在的权限
         expanded_permission_names = set()
         for perm in raw_permissions:
             permission_name = perm.name
             if permission_name == '*':
-                # 全部权限
-                expanded_permission_names.update(SYSTEM_PERMISSIONS.keys())
+                # 全部权限 - 只展开数据库中实际存在的权限
+                expanded_permission_names.update(all_permissions.keys())
             elif permission_name.endswith(':*'):
-                # 模块下的所有权限
+                # 模块下的所有权限 - 只展开数据库中实际存在的权限
                 module = permission_name[:-2]
-                for sys_perm in SYSTEM_PERMISSIONS.keys():
-                    if sys_perm.startswith(f"{module}:"):
-                        expanded_permission_names.add(sys_perm)
+                for db_perm in all_permissions.keys():
+                    if db_perm.startswith(f"{module}:"):
+                        expanded_permission_names.add(db_perm)
             elif permission_name.startswith('*:'):
-                # 所有模块的特定操作
+                # 所有模块的特定操作 - 只展开数据库中实际存在的权限
                 action = permission_name[2:]
-                for sys_perm in SYSTEM_PERMISSIONS.keys():
-                    if sys_perm.endswith(f":{action}"):
-                        expanded_permission_names.add(sys_perm)
-            else:
-                # 具体权限
-                expanded_permission_names.add(permission_name)
+                for db_perm in all_permissions.keys():
+                    if db_perm.endswith(f":{action}"):
+                        expanded_permission_names.add(db_perm)
         
-        # 构建权限响应数据，使用数据库中的真实ID
-        permissions_data = []
+        # 添加展开的具体权限（排除已经在原始权限中的）
         for perm_name in sorted(expanded_permission_names):
-            if perm_name in all_permissions:
+            if perm_name not in original_permission_names:
                 permissions_data.append({
                     "id": all_permissions[perm_name]["id"],  # 使用数据库中的真实ID
                     "name": perm_name,
                     "display_name": all_permissions[perm_name]["display_name"] or SYSTEM_PERMISSIONS.get(perm_name, perm_name)
                 })
-            elif perm_name in SYSTEM_PERMISSIONS:
-                # 如果数据库中没有该权限记录，但在系统权限定义中存在，则跳过或记录警告
-                logger.warning(f"Permission '{perm_name}' exists in SYSTEM_PERMISSIONS but not in database")
-                continue
         
         role_data['permissions'] = permissions_data
 
@@ -272,42 +278,48 @@ async def update_role(
         all_permissions_result = await db.execute(all_permissions_query)
         all_permissions = {perm.name: {"id": perm.id, "display_name": perm.display_name} for perm in all_permissions_result.fetchall()}
         
-        # 展开通配符权限
+        # 构建权限响应数据，包含原始权限和展开的权限
+        permissions_data = []
+        original_permission_names = set()
+        
+        # 首先添加原始权限（包括通配符权限）
+        for perm in raw_permissions:
+            permission_name = perm.name
+            original_permission_names.add(permission_name)
+            permissions_data.append({
+                "id": perm.id,  # 使用数据库中的真实ID
+                "name": permission_name,
+                "display_name": perm.display_name or SYSTEM_PERMISSIONS.get(permission_name, permission_name)
+            })
+        
+        # 然后展开通配符权限，但只基于数据库中实际存在的权限
         expanded_permission_names = set()
         for perm in raw_permissions:
             permission_name = perm.name
             if permission_name == '*':
-                # 全部权限
-                expanded_permission_names.update(SYSTEM_PERMISSIONS.keys())
+                # 全部权限 - 只展开数据库中实际存在的权限
+                expanded_permission_names.update(all_permissions.keys())
             elif permission_name.endswith(':*'):
-                # 模块下的所有权限
+                # 模块下的所有权限 - 只展开数据库中实际存在的权限
                 module = permission_name[:-2]
-                for sys_perm in SYSTEM_PERMISSIONS.keys():
-                    if sys_perm.startswith(f"{module}:"):
-                        expanded_permission_names.add(sys_perm)
+                for db_perm in all_permissions.keys():
+                    if db_perm.startswith(f"{module}:"):
+                        expanded_permission_names.add(db_perm)
             elif permission_name.startswith('*:'):
-                # 所有模块的特定操作
+                # 所有模块的特定操作 - 只展开数据库中实际存在的权限
                 action = permission_name[2:]
-                for sys_perm in SYSTEM_PERMISSIONS.keys():
-                    if sys_perm.endswith(f":{action}"):
-                        expanded_permission_names.add(sys_perm)
-            else:
-                # 具体权限
-                expanded_permission_names.add(permission_name)
+                for db_perm in all_permissions.keys():
+                    if db_perm.endswith(f":{action}"):
+                        expanded_permission_names.add(db_perm)
         
-        # 构建权限响应数据，使用数据库中的真实ID
-        permissions_data = []
+        # 添加展开的具体权限（排除已经在原始权限中的）
         for perm_name in sorted(expanded_permission_names):
-            if perm_name in all_permissions:
+            if perm_name not in original_permission_names:
                 permissions_data.append({
                     "id": all_permissions[perm_name]["id"],  # 使用数据库中的真实ID
                     "name": perm_name,
                     "display_name": all_permissions[perm_name]["display_name"] or SYSTEM_PERMISSIONS.get(perm_name, perm_name)
                 })
-            elif perm_name in SYSTEM_PERMISSIONS:
-                # 如果数据库中没有该权限记录，但在系统权限定义中存在，则跳过或记录警告
-                logger.warning(f"Permission '{perm_name}' exists in SYSTEM_PERMISSIONS but not in database")
-                continue
         
         role_data['permissions'] = permissions_data
 
@@ -402,6 +414,11 @@ async def get_roles(
             user_counts = {
                 row.role_id: row.user_count for row in user_count_result}
 
+        # 获取数据库中所有权限，用于通配符权限展开
+        from app.models.role import Permission
+        all_permissions_result = await db.execute(select(Permission.name, Permission.display_name))
+        all_permissions = {perm[0]: perm[1] for perm in all_permissions_result.fetchall()}
+        
         # 转换为响应模型
         role_list = []
         for role in roles:
@@ -419,20 +436,20 @@ async def get_roles(
                 
                 for permission in role_permissions:
                     if permission == '*' or permission == '*:*':
-                        # 超级权限，添加所有系统权限
-                        expanded_permissions.update(SYSTEM_PERMISSIONS.keys())
+                        # 超级权限，添加数据库中实际存在的所有权限
+                        expanded_permissions.update(all_permissions.keys())
                     elif permission.endswith(':*'):
-                        # 模块通配符权限，添加该模块的所有权限
+                        # 模块通配符权限，添加该模块在数据库中实际存在的权限
                         module = permission[:-2]  # 移除 ':*'
-                        for sys_perm in SYSTEM_PERMISSIONS.keys():
-                            if sys_perm.startswith(f"{module}:"):
-                                expanded_permissions.add(sys_perm)
+                        for db_perm in all_permissions.keys():
+                            if db_perm.startswith(f"{module}:"):
+                                expanded_permissions.add(db_perm)
                     elif permission.startswith('*:'):
-                        # 操作通配符权限，添加所有模块的该操作权限
+                        # 操作通配符权限，添加数据库中实际存在的所有模块的该操作权限
                         action = permission[2:]  # 移除 '*:'
-                        for sys_perm in SYSTEM_PERMISSIONS.keys():
-                            if sys_perm.endswith(f":{action}"):
-                                expanded_permissions.add(sys_perm)
+                        for db_perm in all_permissions.keys():
+                            if db_perm.endswith(f":{action}"):
+                                expanded_permissions.add(db_perm)
                     else:
                         # 具体权限，直接添加
                         expanded_permissions.add(permission)
