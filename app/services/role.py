@@ -594,11 +594,12 @@ class RoleService:
         # 排序
         if search_query and search_query.order_by:
             if search_query.order_desc:
-                query = query.order_by(getattr(Permission, search_query.order_by).desc())
+                query = query.order_by(getattr(Permission, search_query.order_by).desc(), Permission.created_at.desc())
             else:
-                query = query.order_by(getattr(Permission, search_query.order_by))
+                query = query.order_by(getattr(Permission, search_query.order_by), Permission.created_at.asc())
         else:
-            query = query.order_by(Permission.level, Permission.sort_order)
+            # 默认排序：先按层级，再按排序字段，最后按创建时间（相同排序的情况下，时间靠后的在最下面）
+            query = query.order_by(Permission.level, Permission.sort_order, Permission.created_at.asc())
         
         # 获取总数
         count_query = select(func.count(Permission.id))
@@ -651,10 +652,10 @@ class RoleService:
     
     async def get_permission_tree(self) -> List[Dict[str, Any]]:
         """获取权限分类树结构"""
-        # 获取所有权限，按层级和排序字段排序
+        # 获取所有权限，按层级、排序字段和创建时间排序
         result = await self.db.execute(
             select(Permission)
-            .order_by(Permission.level, Permission.sort_order)
+            .order_by(Permission.level, Permission.sort_order, Permission.created_at.asc())
         )
         permissions = result.scalars().all()
         
@@ -700,7 +701,7 @@ class RoleService:
     
     async def get_permissions_by_parent(self, parent_id: Optional[int] = None) -> List[Permission]:
         """获取权限列表（支持层级过滤）"""
-        query = select(Permission).order_by(Permission.level, Permission.sort_order)
+        query = select(Permission).order_by(Permission.level, Permission.sort_order, Permission.created_at.asc())
         
         if parent_id is not None:
             query = query.where(Permission.parent_id == parent_id)
@@ -712,7 +713,7 @@ class RoleService:
         """获取所有权限列表（按层级排序）"""
         result = await self.db.execute(
             select(Permission)
-            .order_by(Permission.level, Permission.sort_order)
+            .order_by(Permission.level, Permission.sort_order, Permission.created_at.asc())
         )
         return result.scalars().all()
     
